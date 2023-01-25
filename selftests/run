@@ -1,0 +1,41 @@
+#!/bin/env python3
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#
+# See LICENSE for more details.
+#
+# Copyright: Red Hat Inc. 2020
+# Author: Lukas Doktor <ldoktor@redhat.com>
+
+"""
+Detect and run tests in this folder's subfolders that do not start with '.'
+"""
+
+import os
+import sys
+import unittest
+
+
+if __name__ == '__main__':
+    if '-v' in sys.argv:
+        VERBOSITY = 2
+    else:
+        VERBOSITY = 1
+    BASE_DIR = os.path.dirname(__file__)
+    RUNNER = unittest.TextTestRunner(verbosity=VERBOSITY, resultclass=unittest.TextTestResult)
+    SUITE = unittest.TestSuite()
+    LOADER = unittest.TestLoader()
+    for section in next(os.walk(BASE_DIR))[1]:
+        if section.startswith('.') or section.startswith('__'):
+            continue
+        SUITE.addTests(LOADER.discover(os.path.join(BASE_DIR, section),
+                                       top_level_dir=BASE_DIR))
+    RESULT = RUNNER.run(SUITE)
+    if RESULT.failures or RESULT.errors:
+        sys.exit(1)

@@ -1,0 +1,33 @@
+#!/bin/bash -e
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#
+# See LICENSE for more details.
+#
+# Copyright: Red Hat Inc. 2020
+# Author: Lukas Doktor <ldoktor@redhat.com>
+
+# Executes all unittests with coverage and report code coverage.
+
+CANDIDATES="coverage-3 coverage3 coverage coverage-2"
+COVERAGE="$(which $CANDIDATES 2>/dev/null| head -n 1)"
+if [ "x$COVERAGE" == "x" ]; then
+    echo "No coverage utility found, looked for: $CANDIDATES"
+    exit -1
+fi
+echo "Using coverage utilty: $COVERAGE"
+
+$COVERAGE erase
+rm -f .coverage.*
+UNITTEST_BISECTER_CMD="$COVERAGE run -p --include 'bisecter/*' $PYTHON -m bisecter" $COVERAGE run -p --include "bisecter/*" ./selftests/run
+$COVERAGE combine .coverage*
+echo
+$COVERAGE report -m --include "bisecter/*"
+echo
+$COVERAGE xml
