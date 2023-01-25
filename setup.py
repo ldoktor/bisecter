@@ -69,7 +69,7 @@ if __name__ == '__main__':
           url='https://github.com/distributed-system-analysis/bisecter',
           license="GPLv2+",
           classifiers=[
-              "Development Status :: 4 - Beta",
+              "Development Status :: 2 - Pre-Alpha",
               "Intended Audience :: Developers",
               "License :: OSI Approved :: GNU General Public License v2 or later (GPLv2+)",
               "Natural Language :: English",

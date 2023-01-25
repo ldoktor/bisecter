@@ -23,8 +23,20 @@ import bisecter
 import shutil
 
 
-class UnitTest(unittest.TestCase):
+class BisectionsTest(unittest.TestCase):
+
+    def check_log_for_duplicities(self, bisect):
+        """ Check the internal Bisections._log for duplicate entries """
+        log = bisect._log       # pylint: disable=W0212
+        unique = set("-".join(str(ident) for ident in _.identifier)
+                    for _ in log)
+        self.assertEqual(len(unique), len(log), "Some variant was tested "
+                         f"multiple times\n{unique}\n\n\n{log}")
+        if len(unique) != len(log):
+            raise Exception("Variant tested multiple times!")
+
     def basic_workflow(self, args, condition, exp):
+        """ Run basic bisection and compare it to expected results """
         bisect = bisecter.Bisections(args)
         try:
             current = bisect.current()
@@ -33,16 +45,19 @@ class UnitTest(unittest.TestCase):
                     current = bisect.good()
                 else:
                     current = bisect.bad()
-            act = bisect.last_good
+            act = bisect.current()
             self.assertEqual(exp, act)
+            self.check_log_for_duplicities(bisect)
+            bisect.value()
             return act
         except:
             print("bisect.log()")
             print(bisect.log())
-            print(f"bisect.last_good: {bisect.last_good}")
+            #print(f"bisect.last_good: {bisect.last_good}")
             raise
 
     def test_basic_workflows(self):
+        """ Basic bisect workflow """
         args = [list(range(10)), "abcdefghijklmno", list(range(0, 130, 10))]
         # No matching (should not happen but is a valid input)
         self.basic_workflow(args, lambda x: False, [0, 0, 0])
@@ -58,7 +73,115 @@ class UnitTest(unittest.TestCase):
         self.basic_workflow(args, lambda x: x[0] <= 7, [7, 14, 12])
         self.basic_workflow(args, lambda x: x[0] <= 8, [8, 14, 12])
         self.basic_workflow(args, lambda x: x[0] <= 9, [9, 14, 12])
-        self.basic_workflow(args, lambda x: True, [9, 14, 12])
+        # Combination of parameters affect bisection
+        self.basic_workflow(args, lambda x: x[0] <= 5 and x[1] <= 3,
+                            [5, 3, 12])
+        self.basic_workflow(args,
+                            lambda x: x[0] <= 5 and x[1] <= 3 and x[2] <= 7,
+                            [5, 3, 7])
+        # All goods
+        self.basic_workflow(args, lambda _: True, [9, 14, 12])
+
+    def test_value(self):
+        """Ensures the reported values are correct"""
+        args = [list(range(10)), "abcdefghijklmno", [0, 0, 0, 0, 1, 1, 2]]
+        bisect = bisecter.Bisections(args)
+        self.assertEqual([4, "a", 0], bisect.value())
+        bisect.good()
+        self.assertEqual([7, "a", 0], bisect.value())
+        bisect.bad()
+        self.assertEqual([6, "a", 0], bisect.value())
+        bisect.good()
+        self.assertEqual([6, "h", 0], bisect.value())
+        bisect.bad()
+        self.assertEqual([6, "d", 0], bisect.value())
+        bisect.good()
+        self.assertEqual([6, "f", 0], bisect.value())
+        bisect.good()
+        self.assertEqual([6, "g", 0], bisect.value())
+        bisect.good()
+        self.assertEqual([6, "g", 0], bisect.value())
+        bisect.good()
+        self.assertEqual([6, "g", 1], bisect.value())
+        # Second to last bisection reports 4th element
+        self.assertEqual([6, 6, 4], bisect.bad())
+        self.assertEqual([6, "g", 1], bisect.value())
+        # Last correct bisection reports None
+        self.assertEqual(None, bisect.bad())
+        # And the value should be the last good one
+        self.assertEqual([6, "g", 0], bisect.value())
+        # Repeating bad or good should not affect the bisection further
+        self.assertEqual(None, bisect.bad())
+        self.assertEqual([6, "g", 0], bisect.value())
+        self.assertEqual(None, bisect.good())
+        self.assertEqual([6, "g", 0], bisect.value())
+        self.assertEqual([1, "b", 0], bisect.value([1,1,1]))
+        self.assertEqual([7, "f", 2], bisect.value([7,5,-1]))
+        self.assertRaises(IndexError, bisect.value, [1,1,100])
+
+    def test_skip(self):
+        args = [list(range(10)), "abcdefghijklmno", [0, 0, 0, 0, 1, 1, 2]]
+        bisect = bisecter.Bisections(args)
+        for action, exp in [(bisect.skip, [3, 0, 0]),
+                            (bisect.skip, [5, 0, 0]),
+                            (bisect.skip, [2, 0, 0]),
+                            (bisect.skip, [6, 0, 0]),
+                            (bisect.skip, [1, 0, 0]),
+                            (bisect.skip, [7, 0, 0]),
+                            (bisect.skip, [0, 7, 0]),
+                            (bisect.good, [0, 11, 0]),
+                            (bisect.skip, [0, 10, 0]),
+                            (bisect.bad, [0, 9, 0]),
+                            (bisect.skip, [0, 8, 0]),
+                            (bisect.skip, [0, 7, 3]),
+                            (bisect.good, [0, 7, 5]),
+                            (bisect.bad, [0, 7, 4]),
+                            (bisect.skip, [0, 7, 3]),]:
+            action()
+            self.assertEqual(exp, bisect.current(), f"{exp} != {bisect.value()}"
+                             f"\n\n{bisect.log()}")
+        self.assertEqual(None, bisect.good())
+        self.assertEqual(None, bisect.bad())
+        self.assertEqual(None, bisect.skip())
+
+    def test_steps(self):
+        args = [list(range(10)), "abcdefghijklmno", [0, 0, 0, 0, 1, 1, 2]]
+        bisect = bisecter.Bisections(args)
+        self.assertEqual(11, bisect.steps_left())
+        self.assertEqual(32, bisect.variants_left())
+        bisect.good()
+        self.assertEqual(10, bisect.steps_left())
+        self.assertEqual(27, bisect.variants_left())
+        bisect.bad()
+        self.assertEqual(9, bisect.steps_left())
+        self.assertEqual(25, bisect.variants_left())
+        bisect.bad()
+        bisect.bad()
+        bisect.bad()
+        self.assertEqual(6, bisect.steps_left())
+        self.assertEqual(15, bisect.variants_left())
+        bisect.good()
+        bisect.good()
+        bisect.good()
+        self.assertEqual(3, bisect.steps_left())
+        self.assertEqual(7, bisect.variants_left())
+        bisect.bad()
+        self.assertEqual(2, bisect.steps_left())
+        self.assertEqual(4, bisect.variants_left())
+        bisect.bad()
+        self.assertEqual(0, bisect.steps_left())
+        self.assertEqual(0, bisect.variants_left())
+        bisect.good()
+        self.assertEqual(0, bisect.steps_left())
+        self.assertEqual(0, bisect.variants_left())
+
+
+class BisectionTest(unittest.TestCase):
+    def test_value(self):
+        bisect = bisecter.Bisection("asdf")
+        self.assertEqual("a", bisect.value())
+        bisect.reset()
+        self.assertEqual("s", bisect.value())
 
 '''
 class PathTracker(unittest.TestCase):

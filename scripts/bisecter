@@ -13,8 +13,10 @@
 # Copyright: Red Hat Inc. 2023
 # Author: Lukas Doktor <ldoktor@redhat.com>
 
-from bisecter import main
+from bisecter import Bisecter
+import sys
 
 
 if __name__ == '__main__':
-    return main()
+    APP = Bisecter()
+    sys.exit(APP())

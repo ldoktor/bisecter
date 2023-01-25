@@ -22,7 +22,7 @@ from setup import _get_git_version  # pylint: disable=C0413
 # -- Project information -----------------------------------------------------
 
 project = 'RunPerf'
-copyright = '2020, Lukáš Doktor'
+copyright = '2023, Lukáš Doktor'
 author = 'Lukáš Doktor'
 
 # The full version, including alpha/beta/rc tags
