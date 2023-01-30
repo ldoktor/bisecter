@@ -61,7 +61,7 @@ def get_long_description():
 if __name__ == '__main__':
     setup(name='bisecter',
           version=_get_git_version(),
-          description='TODO',
+          description='Allows to bisect over arbitrary number of arguments.',
           long_description=get_long_description(),
           long_description_content_type="text/markdown",
           author='Lukas Doktor',

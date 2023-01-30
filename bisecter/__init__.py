@@ -273,7 +273,7 @@ class Bisecter:
         def variant_id(arg):
             """Parse variant ID"""
             return [int(_) for _ in arg.split('-')]
-        parser = argparse.ArgumentParser(prog='Bisecter', description='Allows'
+        parser = argparse.ArgumentParser(prog='Bisecter', description='Allows '
                                          'to bisect over arbitrary number of '
                                          'arguments.')
         parser.add_argument('--state-file', help='Override path to the '
