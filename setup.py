@@ -66,7 +66,7 @@ if __name__ == '__main__':
           long_description_content_type="text/markdown",
           author='Lukas Doktor',
           author_email='ldoktor@redhat.com',
-          url='https://github.com/distributed-system-analysis/bisecter',
+          url='https://github.com/ldoktor/bisecter',
           license="GPLv2+",
           classifiers=[
               "Development Status :: 2 - Pre-Alpha",
