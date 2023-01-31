@@ -1,0 +1,53 @@
+---
+name: Run-perf CI
+
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+
+jobs:
+  selftests:
+    name: ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.9]
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 500
+      - name: Fetch tags required to get version
+        run: git fetch --tags --depth 500
+      - uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install -r requirements.txt
+      - run: make check
+
+  code_coverage:
+    name: CodeCoverage
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 500
+      - name: Fetch tags required for run-perf version
+        run: git fetch --tags --depth 500
+      - uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install -r requirements.txt
+      - run: |
+          pip install coverage
+          curl -L https://codeclimate.com/downloads/test-reporter/test-reporter-latest-linux-amd64 > ./cc-test-reporter
+          chmod +x ./cc-test-reporter
+          ./cc-test-reporter before-build
+          make develop && ./selftests/run_coverage
+          ./cc-test-reporter after-build
+        env:
+          CC_TEST_REPORTER_ID: 94be13b278952fe5d962ff486f89c69a824bdc4d6882267c24eb6af326e643ec
+
