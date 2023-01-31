@@ -82,4 +82,4 @@ if __name__ == '__main__':
           scripts=['scripts/bisecter'],
           test_suite='selftests',
           python_requires='>=3.5',
-          install_requires=['PyYAML'])
+          install_requires=[])
