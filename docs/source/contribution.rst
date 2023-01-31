@@ -39,9 +39,9 @@ First time contribution
 Clone and deploy
 ----------------
 
-Run-perf is a Python3 project, the simplest way to start hacking on it is to::
+Bisecter is a Python3 project, the simplest way to start hacking on it is to::
 
-    git clone https://github.com/distributed-system-analysis/bisecter.git
+    git clone https://github.com/ldoktor/bisecter.git
     cd bisecter
     python3 setup.py develop --user
 
@@ -59,7 +59,7 @@ Develop your feature
 
 We are using github pull request to accept changes, the usual workflow is:
 
-1. go to https://github.com/distributed-system-analysis/bisecter
+1. go to https://github.com/ldoktor/bisecter
 2. on the right side click ``fork`` and select under which organization
    you intend to clone it.
 3. add this fork to your local git by ``git remote add $name https://github.com/$name/bisecter``
@@ -75,7 +75,7 @@ We are using github pull request to accept changes, the usual workflow is:
    for that.
 7. commit them to your repo via ``git push $name HEAD`` optionally followed
    by ``-f`` to force-override the changes (again, replace `$name` with you)
-#. go to https://github.com/distributed-system-analysis/bisecter where a new
+#. go to https://github.com/ldoktor/bisecter where a new
    ``Compare & pull request`` button listing your new branch should appear
    (alternatively you can go to your fork, select your branch and use the
    ``Pull request`` button from there.

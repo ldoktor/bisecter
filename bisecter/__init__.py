@@ -12,23 +12,8 @@
 #
 # Copyright: Red Hat Inc. 2023
 # Author: Lukas Doktor <ldoktor@redhat.com>
-"""
-Example usage:
 
-bisecter start '["some", "values"]' '["another", "values"]'
-my_script "$(bisecter args)" $(bisecter id)
-bisecter good
-my_script "$(bisecter args)" $(bisecter id)
-bisecter bad
-...
-bisecter log
-bisecter reset
-
-bisecter start '["some", "values"]' '["another", "values"]'
-bisecter run my_script
-bisecter log
-bisecter reset
-"""
+"""Tool to drive bisection over multiple set of arguments"""
 
 import argparse
 import ast
