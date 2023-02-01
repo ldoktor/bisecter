@@ -472,10 +472,15 @@ class Bisecter:
             variant = self.args.id
         else:
             variant = None
-        if self.args.raw:
-            print(self.bisection.value(variant))
-        else:
-            self._value(variant)
+        try:
+            if self.args.raw:
+                print(self.bisection.value(variant))
+            else:
+                self._value(variant)
+        except IndexError:
+            sys.stderr.write("Incorrect id "
+                             f"{'-'.join(str(_) for _ in variant)}\n")
+            sys.exit(-1)
 
     def identifier(self):
         """
