@@ -513,7 +513,3 @@ class Bisecter:
                 sys.stderr.write(f"Failed to remove '{self.args.state_file}': "
                                  f"{details}\n")
                 sys.exit(-1)
-
-if __name__ == '__main__':
-    APP = Bisecter()
-    sys.exit(APP())
