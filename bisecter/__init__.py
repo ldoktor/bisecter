@@ -315,10 +315,6 @@ class Bisecter:
         try:
             with open(self.args.state_file, 'bw') as fd_state:
                 pickle.dump(self.bisection, fd_state)
-        except pickle.UnpicklingError as details:
-            sys.stderr.write("Failed to write bisecter state to "
-                             f"{self.args.state_file}: {details}\n")
-            sys.exit(-1)
         except IOError as details:
             sys.stderr.write("Failed to open bisecter state file "
                              f"{self.args.state_file}: {details}\n")
