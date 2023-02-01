@@ -276,7 +276,7 @@ class Bisecter:
                            'separated lists of values this bisection will '
                            'iterate over; bisecter assumes '
                            'the first item of each argument as good and the '
-                           'last item as bad.', nargs='+')
+                           'last item as bad.', nargs='*')
         for status in ("good", "bad", "skip"):
             _ = subparsers.add_parser(status, help='Tag the current '
                                       f'result as {status}; get the '
