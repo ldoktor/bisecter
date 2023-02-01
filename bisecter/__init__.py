@@ -267,7 +267,7 @@ class Bisecter:
                             type=os.path.abspath)
         subparsers = parser.add_subparsers(dest='cmd')
         start = subparsers.add_parser('start', help='Initialize bisection')
-        start.add_argument('--from-file', help='Read arguments from YAML file')
+        start.add_argument('--from-yaml', help='Read arguments from YAML file')
         start.add_argument('--extended-arguments', '-E', help='On top of the '
                            'comma separated arguments allow certain evals, '
                            'eg. foo,range(10,31,10),bar becomes ["foo", "10", '
@@ -372,11 +372,11 @@ class Bisecter:
         """
         Initialize the work dirs and define arguments
         """
-        if self.args.from_file:
+        if self.args.from_yaml:
             if self.args.arguments:
                 sys.stderr.write('WARNING: Replacing arguments specified '
                                  'as positional arguments with the ones '
-                                 f'from "{self.args.from_file}" file\n')
+                                 f'from "{self.args.from_yaml}" file\n')
             try:
                 import yaml     # optional dependency pylint: disable=C0415
             except ImportError:
@@ -384,15 +384,15 @@ class Bisecter:
                                  "arguments from file\n")
                 sys.exit(-1)
             try:
-                with open(self.args.from_file, encoding='utf8') as inp:
+                with open(self.args.from_yaml, encoding='utf8') as inp:
                     arguments = yaml.load(inp, yaml.SafeLoader)
             except yaml.YAMLError as details:
                 sys.stderr.write('Failed to load arguments from '
-                                 f'{self.args.from_file}: {details}\n')
+                                 f'{self.args.from_yaml}: {details}\n')
                 sys.exit(-1)
             except IOError as details:
                 sys.stderr.write('Failed to read arguments file '
-                                 f'{self.args.from_file}: {details}\n')
+                                 f'{self.args.from_yaml}: {details}\n')
                 sys.exit(-1)
         elif self.args.extended_arguments:
             arguments = self._parse_extended_args(self.args.arguments)
