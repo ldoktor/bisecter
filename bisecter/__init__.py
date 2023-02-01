@@ -247,7 +247,7 @@ class Bisecter:
                 'log': self.log,
                 'reset': self.reset}.get(self.args.cmd)
         if func is None:
-            sys.stderr.write("Unknown command {self.args.cmd}\n")
+            sys.stderr.write(f"Unknown command {self.args.cmd}\n")
             sys.exit(-1)
         return func()
 
