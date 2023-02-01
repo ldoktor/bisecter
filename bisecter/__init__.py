@@ -340,20 +340,14 @@ class Bisecter:
     def _parse_extended_args(self, arguments):
         def range_repl(matchobj):
             args = []
-            if '.' in matchobj.group(2):
-                args.append(float(matchobj.group(2)))
-            else:
-                args.append(int(matchobj.group(2)))
+            args.append(int(matchobj.group(2)))
             for arg in matchobj.groups()[2:]:
                 if arg is None:
                     continue
-                if '.' in arg:
-                    args.append(float(arg[1:]))
-                else:
-                    args.append(int(arg[1:]))
+                args.append(int(arg[1:]))
             return ','.join(str(_) for _ in range(*args))
 
-        re_range = re.compile(r'(range\(([^\),]+)(,[^\),]+)?(,[^\),]+)?\))')
+        re_range = re.compile(r'(range\((\d+)(,\s*\d+\s*)?(,\s*\d+\s*)?\))')
         args = []
         for arg in arguments:
             line = re_range.sub(range_repl, arg)
