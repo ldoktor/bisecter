@@ -376,6 +376,16 @@ class Bisecter:
             try:
                 with open(self.args.from_yaml, encoding='utf8') as inp:
                     arguments = yaml.load(inp, yaml.SafeLoader)
+                    try:
+                        arguments = [[str(arg) for arg in args]
+                                     for args in arguments]
+                    except Exception as details:
+                        sys.stderr.write('Failed to parse arguments from '
+                                         f'{self.args.from_yaml}, ensure '
+                                         'it contains list of lists '
+                                         'convertable to strings: '
+                                         f'{details}\n')
+                        sys.exit(-1)
             except yaml.YAMLError as details:
                 sys.stderr.write('Failed to load arguments from '
                                  f'{self.args.from_yaml}: {details}\n')
