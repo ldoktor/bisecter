@@ -442,25 +442,24 @@ class Bisecter:
         Keep executing args.command using it's exit code to drive the bisection
         """
         self._load_state()
-        with open(os.devnull, "r+", encoding="utf-8") as devnull:
-            bret = True
-            while bret is not None:
-                self._save_state()
-                self._report_remaining_steps()
-                args = self.args.command + self.bisection.value()
-                sys.stderr.write(f"Running {args}\n")
-                ret = subprocess.run(args, stdin=devnull, check=False)
-                if ret.returncode == 0:
-                    bret = self.bisection.good()
-                elif ret.returncode == 125:
-                    bret = self.bisection.skip()
-                elif ret.returncode <= 127:
-                    bret = self.bisection.bad()
-                else:
-                    sys.stderr.write(f"Command {' '.join(self.args.command)}"
-                                     f"returned {ret.returncode}, interrupting"
-                                     " the automated bisection.")
-                    sys.exit(-1)
+        bret = True
+        while bret is not None:
+            self._save_state()
+            self._report_remaining_steps()
+            args = self.args.command + self.bisection.value()
+            sys.stderr.write(f"Running {args}\n")
+            ret = subprocess.run(args, check=False)
+            if ret.returncode == 0:
+                bret = self.bisection.good()
+            elif ret.returncode == 125:
+                bret = self.bisection.skip()
+            elif ret.returncode <= 127:
+                bret = self.bisection.bad()
+            else:
+                sys.stderr.write(f"Command {' '.join(self.args.command)}"
+                                 f"returned {ret.returncode}, interrupting"
+                                 " the automated bisection.\n")
+                sys.exit(-1)
         self._value()
 
     def arguments(self):
