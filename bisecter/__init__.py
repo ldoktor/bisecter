@@ -444,7 +444,6 @@ class Bisecter:
         self._load_state()
         bret = True
         while bret is not None:
-            self._save_state()
             self._report_remaining_steps()
             args = self.args.command + self.bisection.value()
             sys.stderr.write(f"Running {args}\n")
@@ -456,10 +455,12 @@ class Bisecter:
             elif ret.returncode <= 127:
                 bret = self.bisection.bad()
             else:
+                self._save_state()
                 sys.stderr.write(f"Command {' '.join(self.args.command)}"
                                  f"returned {ret.returncode}, interrupting"
                                  " the automated bisection.\n")
                 sys.exit(-1)
+            self._save_state()
         self._value()
 
     def arguments(self):
