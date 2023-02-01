@@ -14,13 +14,25 @@
 # Author: Lukas Doktor <ldoktor@redhat.com>
 
 import os
-import re
+import shutil
+import subprocess
+import sys
 import tempfile
-from unittest import mock
 import unittest
 
 import bisecter
-import shutil
+
+try:
+    import yaml
+    YAML_INSTALLED = True
+    del yaml
+except ImportError:
+    YAML_INSTALLED = False
+
+BISECTER = os.environ.get("UNITTEST_BISECTER_CMD",
+                          f"{sys.executable} -m bisecter")
+TEST_SH_PATH = os.path.join(os.path.dirname(__file__), "assets",
+                            "test.sh")
 
 
 class BisectionsTest(unittest.TestCase):
@@ -53,7 +65,6 @@ class BisectionsTest(unittest.TestCase):
         except:
             print("bisect.log()")
             print(bisect.log())
-            #print(f"bisect.last_good: {bisect.last_good}")
             raise
 
     def test_basic_workflows(self):
@@ -183,48 +194,151 @@ class BisectionTest(unittest.TestCase):
         bisect.reset()
         self.assertEqual("s", bisect.value())
 
-'''
-class PathTracker(unittest.TestCase):
+class BisecterTest(unittest.TestCase):
     def setUp(self):
-        self.tmpdir = tempfile.mkdtemp(prefix="runperf-selftest")
+        self.tmpdir = tempfile.mkdtemp(prefix="bisecter-selftest")
+        self.statefile = os.path.join(self.tmpdir, "statefile")
+        self.bisect = f"{BISECTER} --state-file {self.statefile}"
 
-    def test_path_tracker(self):
-        tracker = utils.ContextManager(mock.Mock())
-        join = os.path.join
-        self.assertEqual(None, tracker.get())
-        self.assertRaises(RuntimeError, tracker.set, 0, "foo")
-        tracker.set_root(self.tmpdir)
-        self.assertEqual(self.tmpdir, tracker.get())
-        tracker.set(0, "bar")
-        self.assertEqual(join(self.tmpdir, "bar"), tracker.get())
-        tracker.set(0, "foo")
-        self.assertEqual(join(self.tmpdir, "foo"), tracker.get())
-        tracker.set(3, "baz")
-        self.assertEqual(join(self.tmpdir, "foo", "__NOT_SET__",
-                              "__NOT_SET__", "baz"), tracker.get())
-        tracker.set(1, "bar")
-        self.assertEqual(join(self.tmpdir, "foo", "bar"), tracker.get())
-        tracker.set(1, "baz")
-        self.assertEqual(join(self.tmpdir, "foo", "baz"), tracker.get())
-        tracker.set(2, "bar")
-        self.assertEqual(join(self.tmpdir, "foo", "baz", "bar"), tracker.get())
-        tracker.set(-1, "fee")
-        self.assertEqual(join(self.tmpdir, "foo", "baz", "fee"), tracker.get())
-        tracker.set(1, os.path.join(self.tmpdir, "foo", "another", "bar"))
-        self.assertEqual(join(self.tmpdir, "foo", "another", "bar"),
-                         tracker.get())
-        tracker.set_level(1)
-        self.assertEqual(join(self.tmpdir, "foo"), tracker.get())
-        tracker.set_level(0)
-        self.assertEqual(self.tmpdir, tracker.get())
-        tracker.set_level(1)
-        self.assertEqual(join(self.tmpdir, "__NOT_SET__"), tracker.get())
+    def test_basic_workflow(self):
+        bisect = self.bisect
+        out = subprocess.run(f"{bisect} start -E 'range(100)' 'range(100)' "
+                             "'range(0,100,    1   )'", capture_output=True,
+                             check=True, shell=True)
+        self.assertIn(b"49 0 0", out.stdout)
+        out = subprocess.run(f"{bisect} bad", capture_output=True, check=True,
+                             shell=True)
+        self.assertIn(b"24 0 0", out.stdout)
+        out = subprocess.run(f"{bisect} bad", capture_output=True, check=True,
+                             shell=True)
+        self.assertIn(b"12 0 0", out.stdout)
+        out = subprocess.run(f"{bisect} bad", capture_output=True, check=True,
+                             shell=True)
+        self.assertIn(b"6 0 0", out.stdout)
+        out = subprocess.run(f"{bisect} good", capture_output=True, check=True,
+                             shell=True)
+        self.assertIn(b"9 0 0", out.stdout)
+        out = subprocess.run(f"{bisect} good", capture_output=True, check=True,
+                             shell=True)
+        self.assertIn(b"11 0 0", out.stdout)
+        out = subprocess.run(f"{bisect} bad", capture_output=True, check=True,
+                             shell=True)
+        self.assertIn(b"10 0 0", out.stdout)
+        out = subprocess.run(f"{bisect} bad", capture_output=True, check=True,
+                             shell=True)
+        self.assertIn(b"9 49 0", out.stdout)
+        out = subprocess.run(f"{bisect} skip", capture_output=True, check=True,
+                             shell=True)
+        self.assertIn(b"9 48 0", out.stdout)
+        out = subprocess.run(f"{bisect} run {TEST_SH_PATH}",
+                             capture_output=True, check=True, shell=True)
+        self.assertIn(b"9 3 76", out.stdout)
+        out = subprocess.run(f"{bisect} args", capture_output=True, check=True,
+                             shell=True)
+        self.assertIn(b"9 3 76", out.stdout)
+        out = subprocess.run(f"{bisect} args -r 9-8-7", capture_output=True,
+                             check=True, shell=True)
+        self.assertIn(b"['9', '8', '7']", out.stdout)
+        out = subprocess.run(f"{bisect} args 9999-999",
+                             capture_output=True, check=False, shell=True)
+        self.assertEqual(out.returncode, 255)
+        self.assertIn(b"Incorrect id", out.stderr)
+        out = subprocess.run(f"{bisect} id", capture_output=True, check=True,
+                             shell=True)
+        self.assertIn(b"9-3-76", out.stdout)
+        out = subprocess.run(f"{bisect} log", capture_output=True, check=True,
+                             shell=True)
+        self.assertEqual(out.stdout.count(b'\n'), 112, "Incorrect number of "
+                         f"lines in:\n{out.stdout}")
+        out = subprocess.run(f"{bisect} good", capture_output=True, check=True,
+                             shell=True)
+        self.assertIn(b"Bisection complete", out.stdout)
+        self.assertIn(b"9 3 76", out.stdout)
+        out = subprocess.run(f"{bisect} start foo", capture_output=True,
+                             check=False, shell=True)
+        self.assertEqual(out.returncode, 255)
+        self.assertIn(b"already in progress", out.stderr)
+        _ = subprocess.run(f"{bisect} reset", capture_output=True,
+                           check=True, shell=True)
+        out = subprocess.run(f"{bisect} reset", capture_output=True,
+                             check=True, shell=True)
+        self.assertIn(b"No bisection in", out.stderr)
+        self.assertFalse(os.path.exists(self.statefile))
+        out = subprocess.run(f"{bisect} non-existing-command",
+                             capture_output=True, check=False, shell=True)
+        self.assertEqual(out.returncode, 2, out)
+
+    def test_run_with_interruption(self):
+        bisect = self.bisect
+        out = subprocess.run(f"{bisect} start 1,1,1,1,1,FAILURE 0 0",
+                             capture_output=True, check=True, shell=True)
+        self.assertIn(b'1 0 0', out.stdout)
+        out = subprocess.run(f"{bisect} run {TEST_SH_PATH}",
+                             capture_output=True, check=False, shell=True)
+        self.assertIn(b"returned 135, interrupting", out.stderr)
+        out = subprocess.run(f"{bisect} log", capture_output=True, check=True,
+                             shell=True)
+        self.assertEqual(out.stdout.count(b'\n'), 2, "Incorrect number of "
+                         f"lines in:\n{out.stdout}")
+
+    def test_incorrect_files(self):
+        bisect = self.bisect
+        out = subprocess.run(f"{bisect}{os.path.sep}bad-location start foo",
+                             capture_output=True, check=False, shell=True)
+        self.assertIn(b"Failed to open", out.stderr, out)
+        self.assertEqual(out.returncode, 255, out)
+        out = subprocess.run(f"{bisect} args",
+                             capture_output=True, check=False, shell=True)
+        self.assertEqual(out.returncode, 255, out)
+        self.assertIn(b"Failed to open", out.stderr, out)
+        self.assertIn(b" start' first", out.stderr, out)
+        with open(self.statefile, 'wb') as state:
+            state.write(b'malformed state file')
+        out = subprocess.run(f"{bisect} args",
+                             capture_output=True, check=False, shell=True)
+        self.assertEqual(out.returncode, 255, out)
+        self.assertIn(b"Failed to read bisecter state", out.stderr, out)
+        os.remove(self.statefile)
+
+    @unittest.skipUnless(YAML_INSTALLED, "PyYAML not installed")
+    def test_yaml(self):
+        bisect = self.bisect
+        yaml_path = os.path.join(self.tmpdir, 'args.yml')
+        out = subprocess.run(f"{bisect} start --from-yaml {yaml_path}",
+                             capture_output=True, check=False, shell=True)
+        self.assertEqual(out.returncode, 255, out)
+        self.assertIn(b"Failed to read", out.stderr, out)
+        with open(yaml_path, 'wb') as yaml_fd:
+            yaml_fd.write(b"'incorrect yaml")
+        out = subprocess.run(f"{bisect} start --from-yaml {yaml_path}",
+                             capture_output=True, check=False, shell=True)
+        self.assertEqual(out.returncode, 255, out)
+        self.assertIn(b"Failed to load", out.stderr, out)
+        with open(yaml_path, 'wb') as yaml_fd:
+            yaml_fd.write(b"[[1, 2, 3], [4, 5]]")
+        out = subprocess.run(f"{bisect} start --from-yaml {yaml_path}",
+                             capture_output=True, check=True, shell=True)
+        self.assertIn(b'2 4', out.stdout)
+        self.assertNotIn(b"WARNING", out.stderr)
+        subprocess.run(f"{bisect} reset", capture_output=True, check=True,
+                       shell=True)
+        out = subprocess.run(f"{bisect} start --from-yaml {yaml_path} 1,2,3",
+                             capture_output=True, check=True, shell=True)
+        self.assertIn(b'2 4', out.stdout)
+        self.assertIn(b"WARNING", out.stderr)
+        subprocess.run(f"{bisect} reset", capture_output=True, check=True,
+                       shell=True)
+        with open(yaml_path, 'wb') as yaml_fd:
+            yaml_fd.write(b"[4, 5]")
+        out = subprocess.run(f"{bisect} start --from-yaml {yaml_path}",
+                             capture_output=True, check=False, shell=True)
+        self.assertIn(b"Failed to parse arguments", out.stderr)
+        self.assertEqual(out.returncode, 255, out)
 
     def tearDown(self):
         if self.tmpdir:
             shutil.rmtree(self.tmpdir)
 
-'''
 
 if __name__ == '__main__':
     unittest.main()

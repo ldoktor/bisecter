@@ -247,7 +247,7 @@ class Bisecter:
                 'log': self.log,
                 'reset': self.reset}.get(self.args.cmd)
         if func is None:
-            sys.stderr.write("Unknown command {self.args.cmd}\n")
+            sys.stderr.write(f"Unknown command {self.args.cmd}\n")
             sys.exit(-1)
         return func()
 
@@ -267,7 +267,7 @@ class Bisecter:
                             type=os.path.abspath)
         subparsers = parser.add_subparsers(dest='cmd')
         start = subparsers.add_parser('start', help='Initialize bisection')
-        start.add_argument('--from-file', help='Read arguments from YAML file')
+        start.add_argument('--from-yaml', help='Read arguments from YAML file')
         start.add_argument('--extended-arguments', '-E', help='On top of the '
                            'comma separated arguments allow certain evals, '
                            'eg. foo,range(10,31,10),bar becomes ["foo", "10", '
@@ -276,7 +276,7 @@ class Bisecter:
                            'separated lists of values this bisection will '
                            'iterate over; bisecter assumes '
                            'the first item of each argument as good and the '
-                           'last item as bad.', nargs='+')
+                           'last item as bad.', nargs='*')
         for status in ("good", "bad", "skip"):
             _ = subparsers.add_parser(status, help='Tag the current '
                                       f'result as {status}; get the '
@@ -315,10 +315,6 @@ class Bisecter:
         try:
             with open(self.args.state_file, 'bw') as fd_state:
                 pickle.dump(self.bisection, fd_state)
-        except pickle.UnpicklingError as details:
-            sys.stderr.write("Failed to write bisecter state to "
-                             f"{self.args.state_file}: {details}\n")
-            sys.exit(-1)
         except IOError as details:
             sys.stderr.write("Failed to open bisecter state file "
                              f"{self.args.state_file}: {details}\n")
@@ -344,20 +340,14 @@ class Bisecter:
     def _parse_extended_args(self, arguments):
         def range_repl(matchobj):
             args = []
-            if '.' in matchobj.group(2):
-                args.append(float(matchobj.group(2)))
-            else:
-                args.append(int(matchobj.group(2)))
+            args.append(int(matchobj.group(2)))
             for arg in matchobj.groups()[2:]:
                 if arg is None:
                     continue
-                if '.' in arg:
-                    args.append(float(arg[1:]))
-                else:
-                    args.append(int(arg[1:]))
+                args.append(int(arg[1:]))
             return ','.join(str(_) for _ in range(*args))
 
-        re_range = re.compile(r'(range\(([^\),]+)(,[^\),]+)?(,[^\),]+)?\))')
+        re_range = re.compile(r'(range\((\d+)(,\s*\d+\s*)?(,\s*\d+\s*)?\))')
         args = []
         for arg in arguments:
             line = re_range.sub(range_repl, arg)
@@ -372,11 +362,11 @@ class Bisecter:
         """
         Initialize the work dirs and define arguments
         """
-        if self.args.from_file:
+        if self.args.from_yaml:
             if self.args.arguments:
                 sys.stderr.write('WARNING: Replacing arguments specified '
                                  'as positional arguments with the ones '
-                                 f'from "{self.args.from_file}" file\n')
+                                 f'from "{self.args.from_yaml}" file\n')
             try:
                 import yaml     # optional dependency pylint: disable=C0415
             except ImportError:
@@ -384,15 +374,25 @@ class Bisecter:
                                  "arguments from file\n")
                 sys.exit(-1)
             try:
-                with open(self.args.from_file, encoding='utf8') as inp:
+                with open(self.args.from_yaml, encoding='utf8') as inp:
                     arguments = yaml.load(inp, yaml.SafeLoader)
+                    try:
+                        arguments = [[str(arg) for arg in args]
+                                     for args in arguments]
+                    except Exception as details:
+                        sys.stderr.write('Failed to parse arguments from '
+                                         f'{self.args.from_yaml}, ensure '
+                                         'it contains list of lists '
+                                         'convertable to strings: '
+                                         f'{details}\n')
+                        sys.exit(-1)
             except yaml.YAMLError as details:
                 sys.stderr.write('Failed to load arguments from '
-                                 f'{self.args.from_file}: {details}\n')
+                                 f'{self.args.from_yaml}: {details}\n')
                 sys.exit(-1)
             except IOError as details:
                 sys.stderr.write('Failed to read arguments file '
-                                 f'{self.args.from_file}: {details}\n')
+                                 f'{self.args.from_yaml}: {details}\n')
                 sys.exit(-1)
         elif self.args.extended_arguments:
             arguments = self._parse_extended_args(self.args.arguments)
@@ -442,25 +442,25 @@ class Bisecter:
         Keep executing args.command using it's exit code to drive the bisection
         """
         self._load_state()
-        with open(os.devnull, "r+", encoding="utf-8") as devnull:
-            bret = True
-            while bret is not None:
+        bret = True
+        while bret is not None:
+            self._report_remaining_steps()
+            args = self.args.command + self.bisection.value()
+            sys.stderr.write(f"Running {args}\n")
+            ret = subprocess.run(args, check=False)
+            if ret.returncode == 0:
+                bret = self.bisection.good()
+            elif ret.returncode == 125:
+                bret = self.bisection.skip()
+            elif ret.returncode <= 127:
+                bret = self.bisection.bad()
+            else:
                 self._save_state()
-                self._report_remaining_steps()
-                args = self.args.command + self.bisection.value()
-                sys.stderr.write(f"Running {args}\n")
-                ret = subprocess.run(args, stdin=devnull, check=False)
-                if ret.returncode == 0:
-                    bret = self.bisection.good()
-                elif ret.returncode == 125:
-                    bret = self.bisection.skip()
-                elif ret.returncode <= 127:
-                    bret = self.bisection.bad()
-                else:
-                    sys.stderr.write(f"Command {' '.join(self.args.command)}"
-                                     f"returned {ret.returncode}, interrupting"
-                                     " the automated bisection.")
-                    sys.exit(-1)
+                sys.stderr.write(f"Command {' '.join(self.args.command)}"
+                                 f"returned {ret.returncode}, interrupting"
+                                 " the automated bisection.\n")
+                sys.exit(-1)
+            self._save_state()
         self._value()
 
     def arguments(self):
@@ -472,10 +472,15 @@ class Bisecter:
             variant = self.args.id
         else:
             variant = None
-        if self.args.raw:
-            print(self.bisection.value(variant))
-        else:
-            self._value(variant)
+        try:
+            if self.args.raw:
+                print(self.bisection.value(variant))
+            else:
+                self._value(variant)
+        except IndexError:
+            sys.stderr.write("Incorrect id "
+                             f"{'-'.join(str(_) for _ in variant)}\n")
+            sys.exit(-1)
 
     def identifier(self):
         """
@@ -508,7 +513,3 @@ class Bisecter:
                 sys.stderr.write(f"Failed to remove '{self.args.state_file}': "
                                  f"{details}\n")
                 sys.exit(-1)
-
-if __name__ == '__main__':
-    APP = Bisecter()
-    sys.exit(APP())
