@@ -61,6 +61,7 @@ class Bisection:
 
     def __init__(self, values):
         self._values = values
+        self.last_index = len(values) - 1
         self._skips = []
         self.current = 0
 
@@ -80,7 +81,7 @@ class Bisection:
         # We iterate over multiple arrays and can not be sure the last
         # one of each is bad
         if (self._bad <= new and
-                not new == len(self._values) - 1):
+                new != self.last_index):
             self.reset(self._last_good, self._last_good)
             return None
         self._good = new
@@ -107,7 +108,7 @@ class Bisection:
         # We iterate over multiple arrays and can not be sure the last
         # one of each is bad
         if new < self._good or (new >= self._bad and
-                                 new != (len(self._values) - 1)):
+                                new != self.last_index):
             self.reset(self._last_good, self._last_good)
             return None
         while new in self._skips:
@@ -119,7 +120,7 @@ class Bisection:
             # We iterate over multiple arrays and can not be sure the last
             # one of each is bad
             if new <= self._good or (new >= self._bad and
-                                     new != (len(self._values) - 1)):
+                                     new != self.last_index):
                 self.reset(self._last_good, self._last_good)
                 return None
         self.current = new
@@ -141,7 +142,7 @@ class Bisection:
     def reset(self, good=None, bad=None):
         """Reset the bisection, optionally select good/bad positions"""
         self._good = 0 if good is None else good
-        self._bad = (len(self._values) - 1) if bad is None else bad
+        self._bad = self.last_index if bad is None else bad
         self._skips = []
         self._update_current()
 
