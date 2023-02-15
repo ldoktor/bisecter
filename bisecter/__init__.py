@@ -12,6 +12,7 @@
 #
 # Copyright: Red Hat Inc. 2023
 # Author: Lukas Doktor <ldoktor@redhat.com>
+import itertools
 
 """Tool to drive bisection over multiple set of arguments"""
 
@@ -49,6 +50,13 @@ class BisectionLogEntry:
         return (f"{self.status.name:4s} "
                 f"{'-'.join(str(_) for _ in self.identifier)}")
 
+    def __eq__(self, other):
+        if isinstance(other, BisectionLogEntry):
+            return self.identifier == other.identifier
+        if isinstance(other, str):
+            return '-'.join(str(_) for _ in self.identifier) == other
+        return self.identifier == other
+
 
 class Bisection:
     """
@@ -57,13 +65,15 @@ class Bisection:
     current = None
     _good = None
     _bad = None
-    _last_good = 0
 
     def __init__(self, values):
         self._values = values
-        self.last_index = len(values) - 1
+        self.current = self._first_bad = self.last_index = len(values) - 1
+        self._good = 0
+        self._bad = self.last_index
         self._skips = []
-        self.current = 0
+        # TODO: Investigate improvements for skip columns cases
+        # self.no_good = True
 
     def value(self, index=None):
         """Value associated to the ``index`` value (by default current one)"""
@@ -71,58 +81,58 @@ class Bisection:
             return self._values[index]
         return self._values[self.current]
 
-    def _update_current(self):
+    def update_current(self):
+        """Update current according to good and bad"""
         self.current = (self._good + self._bad) // 2
 
     def good(self):
         """Mark the current step as good (go to right)"""
-        self._last_good = self.current
         new = self.current + 1
         # We iterate over multiple arrays and can not be sure the last
         # one of each is bad
         if (self._bad <= new and
                 new != self.last_index):
-            self.reset(self._last_good, self._last_good)
+            self.reset(self._first_bad, self._first_bad)
             return None
         self._good = new
-        self._update_current()
+        self.update_current()
         return self.current
 
     def bad(self):
         """Mark the current step as bad (go to left)"""
+        self._first_bad = self.current
         if self.current <= self._good:
-            self.reset(self._last_good, self._last_good)
+            self.reset(self._first_bad, self._first_bad)
             return None
         self._bad = self.current
-        self._update_current()
+        self.update_current()
         if self.current <= 0:
-            self.reset(self._last_good, self._last_good)
+            self.reset(self._first_bad, self._first_bad)
             return None
         return self.current
 
     def skip(self):
         """Mark the current step as skip (untestable)"""
         self._skips.append(self.current)
-        offset = -1
-        new = (self._good + self._bad) // 2 + offset
-        # We iterate over multiple arrays and can not be sure the last
-        # one of each is bad
-        if new < self._good or (new >= self._bad and
-                                new != self.last_index):
-            self.reset(self._last_good, self._last_good)
-            return None
+        new = (self._good + self._bad) // 2
+        max_offset = new * 2
+        offset = 0
         while new in self._skips:
             if offset < 0:
                 offset = 1 - offset
             else:
-                offset = - 1 - offset
+                offset = -1 - offset
+            if abs(offset) > max_offset:
+                self.reset(self._first_bad, self._first_bad)
+                return None
             new += offset
             # We iterate over multiple arrays and can not be sure the last
             # one of each is bad
             if new <= self._good or (new >= self._bad and
                                      new != self.last_index):
-                self.reset(self._last_good, self._last_good)
-                return None
+                # We don't want to test good and bad, but we still want to
+                # test the remaining items up to the max offset
+                self._skips.append(new)
         self.current = new
         return self.current
 
@@ -144,7 +154,7 @@ class Bisection:
         self._good = 0 if good is None else good
         self._bad = self.last_index if bad is None else bad
         self._skips = []
-        self._update_current()
+        self.update_current()
 
 
 class Bisections:
@@ -154,10 +164,14 @@ class Bisections:
 
     def __init__(self, args):
         self.args = [Bisection(arg) for arg in args]
-        if args:
-            self.args[0].reset()
-        self._log = []
+        # Initialize log with first and last checks (trust the user)
+        self._log = [BisectionLogEntry(BisectionStatus.GOOD,
+                                       [0 for _ in args]),
+                     BisectionLogEntry(BisectionStatus.BAD,
+                                       [len(_) - 1 for _ in args])]
         self._active = 0
+        if self.args:
+            self.args[0].current = 0
 
     def current(self):
         """Reports the current variant indexes"""
@@ -175,43 +189,92 @@ class Bisections:
         current = self.current()
         self._log.append(BisectionLogEntry(BisectionStatus.GOOD, current))
         if self._active >= len(self.args):
-            return None
-        this = self.args[self._active].good()
-        if this is None or this == 0:
-            self._active += 1
-            if self._active >= len(self.args):
-                return None
+            return self._postprocess_current(None)
+        self.args[self._active].no_good = False
+        if self.args[self._active].current == 0:
+            # It won't reproduce with the first argument, which means we have
+            # to investigate this item. Reset it and start bisection
             self.args[self._active].reset()
-        return self.current()
+            return self.current()
+        this = self.args[self._active].good()
+        return self._postprocess_current(this)
 
     def bad(self):
         """Mark the current step as bad (go to left)"""
         self._log.append(BisectionLogEntry(BisectionStatus.BAD,
                                            self.current()))
         if self._active >= len(self.args):
-            return None
-        #_this = self.args[self._active].current
+            return self._postprocess_current(None)
+        if self.args[self._active].current == 0:
+            # Still failing with the first argument, this axis is irrelevant,
+            # skip it
+            self.args[self._active].reset(0, 0)
+            return self._postprocess_current(None)
         this = self.args[self._active].bad()
-        if this is None:  # or this == 0:
-            self._active += 1
-            if self._active >= len(self.args):
-                return None
-            self.args[self._active].reset()
-        return self.current()
+        return self._postprocess_current(this)
 
     def skip(self):
         """Mark the current step as skip (untestable)"""
         self._log.append(BisectionLogEntry(BisectionStatus.SKIP,
                                            self.current()))
         if self._active >= len(self.args):
-            return None
+            return self._postprocess_current(None)
         this = self.args[self._active].skip()
+        return self._postprocess_current(this)
+
+    def _postprocess_current(self, this):
+        """
+        Perform common checks on the next variant
+
+        Based on the values it can skip to the next axis, report the previously
+        logged status or simply return the next "current" variant
+
+        :param this: Value of the next index of the current active axis (7)
+        :return: next "current" variant (0-0-7)
+        """
         if this is None:  # or this == 0:
             self._active += 1
             if self._active >= len(self.args):
+                # TODO: Investigate improvements for skip columns cases
+                """
+                # In case of many skips certain columns might have not been
+                # tested yet
+                for i, arg in enumerate(self.args):
+                    '''
+                    if arg._good == arg.last_index:
+                        variant = [_.current if i == j else 0
+                                   for j, _ in enumerate(self.args)]
+                        if variant not in self._log:
+                            arg.reset()
+                            arg.current = 0
+                            return self.current()
+                    '''
+                    if getattr(arg, 'no_good', False) is True:
+                        # I need to go up on these
+                        #import pydevd; pydevd.settrace("127.0.0.1", True, True)
+                        #for _ in self.args:
+                        #    if _.no_good is True:
+                        #        _.reset()
+                        #        _.curret = _.last_index
+                        arg.current = 0
+                        # Set this one to False to skip it next time
+                        arg.no_good = False
+                        self._active = i
+                        return self.current()
+                """
                 return None
-            self.args[self._active].reset()
-        return self.current()
+            # Initialize the next axis to 0 to try if it is important
+            self.args[self._active].current = 0
+            return self._postprocess_current(0)
+        current = self.current()
+        if current in self._log:
+            status = [_.status for _ in self._log if _ == current][0]
+            action = {BisectionStatus.GOOD: "good",
+                      BisectionStatus.BAD: "bad",
+                      BisectionStatus.SKIP: "skip"}[status]
+            return self._postprocess_current(getattr(self.args[self._active],
+                                              action)())
+        return current
 
     def steps_left(self):
         """Report how many steps to test"""
@@ -224,6 +287,10 @@ class Bisections:
     def log(self):
         """Report bisection log"""
         return('\n'.join(str(entry) for entry in self._log))
+
+
+    """
+    """
 
 
 class Bisecter:
@@ -256,6 +323,7 @@ class Bisecter:
         """
         Define arguments
         """
+
         def variant_id(arg):
             """Parse variant ID"""
             return [int(_) for _ in arg.split('-')]
@@ -339,6 +407,7 @@ class Bisecter:
             sys.exit(-1)
 
     def _parse_extended_args(self, arguments):
+
         def range_repl(matchobj):
             args = []
             args.append(int(matchobj.group(2)))
@@ -369,7 +438,7 @@ class Bisecter:
                                  'as positional arguments with the ones '
                                  f'from "{self.args.from_yaml}" file\n')
             try:
-                import yaml     # optional dependency pylint: disable=C0415
+                import yaml  # optional dependency pylint: disable=C0415
             except ImportError:
                 sys.stderr.write("PyYAML not installed, unable to load "
                                  "arguments from file\n")

@@ -47,15 +47,17 @@ class BisectionsTest(unittest.TestCase):
         if len(unique) != len(log):
             raise Exception("Variant tested multiple times!")
 
-    def basic_workflow(self, args, condition, exp):
+    def basic_workflow(self, args, condition, exp, klass=bisecter.Bisections):
         """ Run basic bisection and compare it to expected results """
-        bisect = bisecter.Bisections(args)
+        bisect = klass(args)
         try:
             current = bisect.current()
             while current is not None:
                 if condition(current):
+                    #import pydevd; pydevd.settrace("127.0.0.1", True, True)
                     current = bisect.good()
                 else:
+                    #import pydevd; pydevd.settrace("127.0.0.1", True, True)
                     current = bisect.bad()
             act = bisect.current()
             self.assertEqual(exp, act)
@@ -185,6 +187,49 @@ class BisectionsTest(unittest.TestCase):
         bisect.good()
         self.assertEqual(0, bisect.steps_left())
         self.assertEqual(0, bisect.variants_left())
+
+    def test_down_bisections(self):
+        """ First-fail mode of the bisection """
+        args = [list(range(10)), "abcdefghijklmno", list(range(0, 130, 10))]
+        self.basic_workflow(args, lambda x: not(x[0] > 5 and x[1] > 3),
+                            [5, 3, 0],
+                            bisecter.DownBisections)
+        # No matching (should not happen but is a valid input)
+        self.basic_workflow(args, lambda x: False, [0, 0, 0],
+                            bisecter.DownBisections)
+        # Only 0, 0, 0 is matching
+        self.basic_workflow(args, lambda x: x == [0, 0, 0], [0, 0, 0],
+                            bisecter.DownBisections)
+        # Single parameter affects bisection
+        self.basic_workflow(args, lambda x: x[0] <= 1, [1, 0, 0],
+                            bisecter.DownBisections)
+        self.basic_workflow(args, lambda x: x[0] <= 2, [2, 0, 0],
+                            bisecter.DownBisections)
+        self.basic_workflow(args, lambda x: x[0] <= 3, [3, 0, 0],
+                            bisecter.DownBisections)
+        self.basic_workflow(args, lambda x: x[0] <= 4, [4, 0, 0],
+                            bisecter.DownBisections)
+        self.basic_workflow(args, lambda x: x[0] <= 5, [5, 0, 0],
+                            bisecter.DownBisections)
+        self.basic_workflow(args, lambda x: x[0] <= 6, [6, 0, 0],
+                            bisecter.DownBisections)
+        self.basic_workflow(args, lambda x: x[0] <= 7, [7, 0, 0],
+                            bisecter.DownBisections)
+        self.basic_workflow(args, lambda x: x[0] <= 8, [8, 0, 0],
+                            bisecter.DownBisections)
+        self.basic_workflow(args, lambda x: x[0] <= 9, [9, 0, 0],
+                            bisecter.DownBisections)
+        # Combination of parameters affect bisection
+        self.basic_workflow(args, lambda x: x[0] <= 5 and x[1] <= 3,
+                            [0, 3, 0],
+                            bisecter.DownBisections)
+        self.basic_workflow(args,
+                            lambda x: x[0] <= 5 and x[1] <= 3 and x[2] <= 7,
+                            [0, 0, 7],
+                            bisecter.DownBisections)
+        # All goods
+        self.basic_workflow(args, lambda _: True, [9, 14, 12],
+                            bisecter.DownBisections)
 
 
 class BisectionTest(unittest.TestCase):
