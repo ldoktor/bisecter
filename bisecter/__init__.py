@@ -370,6 +370,81 @@ def range_beaker(arg, arch="x86_64", extra_args=None):
     return distros_from_bkr_json(json.loads(ret.stdout), first, last)
 
 
+def range_url(arg):
+    """
+    Parse argument into list of links
+
+    :param arg: Query a page for links (koji, python -m http.server, ...):
+
+        * url://example.org (all links from the page)
+        * url://example.org:kernel (links containing kernel)
+        * url://example.org:kernel:6.0.7 (ditto but start from 6.0.7)
+        * url://example.org:kernel:6.0.7:6.1.9
+          (links between 6.0.7 and 6.1.9)
+        * url://example.org:kernel:+3 (first 3 links containing kernel)
+        * url://example.org:kernel:-3 (last 3 links containing kernel)
+        * url://example.org:kernel:+3:-2
+          (links_containing_kernel[3:-2])
+
+    :return: list of individual links (eg.:
+        ["example.org/foo", "example.org/bar"])
+    """
+
+    def parse_arg(arg):
+        args = esplit(':', arg[6:], 3)
+        if len(args) < 4:
+            args += [None, ] * (4 - len(args))
+        for i in (2, 3):
+            if not args[i]:
+                continue
+            if args[i].startswith('+'):
+                args[i] = int(args[i])
+            elif args[i].startswith('-'):
+                args[i] = int(args[i])
+        return args
+
+    def get_filtered_links(page, filt):
+        with urllib.request.urlopen(page) as req:
+            content = req.read().decode('utf-8')
+        if filt is None:
+            filt = ''
+        return re.findall(f"href=\"([^\"]+)\"[^>]*>({filt}[^<]*)<", content)
+
+    def apply_ranges(links, first, last):
+        if isinstance(first, int):
+            offset1 = first
+            first = None
+        else:
+            offset1 = 0
+        if isinstance(last, int):
+            offset2 = last
+            last = None
+        else:
+            offset2 = None
+        ilinks = iter(links[offset1:offset2])
+        out = []
+        # Look for first
+        if first:
+            for link in ilinks:
+                if link[1] and re.match(first, link[1]):
+                    out.append(link[0])
+                    break
+        # Add all links until last
+        for link in ilinks:
+            if not link[0]:
+                continue
+            if link[0] not in out:
+                out.append(link[0])
+            if last and re.match(last, link[1]):
+                break
+        return out
+
+    page, filt, first, last = parse_arg(arg)
+    links = get_filtered_links(page, filt)
+    return [urllib.parse.urljoin(page, link)
+            for link in apply_ranges(links, first, last)]
+
+
 class Bisecter:
 
     """Cmdline app to drive bisection"""
@@ -499,6 +574,8 @@ class Bisecter:
         for arg in arguments:
             if arg.startswith("beaker://"):
                 parsed_args = range_beaker(arg)
+            elif arg.startswith("url://"):
+                parsed_args = range_url(arg)
             else:
                 line = re_range.sub(range_repl, arg)
                 parsed_args = self._split_by_comma(line)
