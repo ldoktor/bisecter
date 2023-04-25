@@ -637,19 +637,19 @@ class Bisecter:
                              "in progress\n")
             sys.exit(-1)
         self._save_state()
-        self._value()
+        print(self._current_value())
 
-    def _value(self, variant=None):
+    def _current_value(self, variant=None):
         """
         Report value of the current variant in a simple form
         """
-        print(' '.join(pipes.quote(_) for _ in self.bisection.value(variant)))
+        return ' '.join(pipes.quote(_) for _ in self.bisection.value(variant))
 
     def _report_remaining_steps(self):
         """
         Report remaining steps count
         """
-        sys.stderr.write(f"Bisecting: {self.bisection.variants_left()} variants "
+        sys.stderr.write(f"Bisecter: {self.bisection.variants_left()} variants"
                          " left to test after this (roughly "
                          f"{self.bisection.steps_left()} steps)\n")
 
@@ -661,12 +661,43 @@ class Bisecter:
         ret = getattr(self.bisection, self.args.cmd)()
         self._save_state()
         if ret is None:
-            # TODO: Add clever messages about first/last arguments...
-            print("Bisection complete, last good combination is "
-                  f"{self._value()}")
-            return
+            self._print_complete_status()
         self._report_remaining_steps()
-        self._value()
+        print(self._current_value())
+
+    def _print_complete_status(self):
+        current = self.bisection.current()
+        prefix = f"Bisection complete in {len(self.bisection._log)} steps, "
+        if any(current):
+            axis = [str(i) for i, v in enumerate(current) if v != 0]
+            if len(axis) == len(self.bisection.args):
+                last = True
+                for arg in self.bisection.args:
+                    if arg.current != arg.last_index:
+                        last = False
+                        break
+                if last:
+                    print(f"{prefix}only the last combination "
+                          "is failing (is the last one really failing?):")
+                else:
+                    print(f"{prefix}failure is caused by a "
+                          "combination of all axis; first bad "
+                          "combination is:")
+            elif len(axis) > 1:
+                print(f"{prefix}failure is caused by a "
+                      f"combination of axis {','.join(axis)}; first "
+                      "bad combination is:")
+            else:
+                if current[-1] == 1:
+                    print(f"{prefix}all tested combinations are "
+                          "failing (is the first one really passing?)")
+                else:
+                    print(f"{prefix}failure is caused only by the "
+                          f"{axis[0]} axis, first bad combination is:")
+        else:
+            print(f"{prefix}even the first (expected to be good) "
+                  "combination reports failure:")
+        print(self._current_value())
 
     def run(self):
         """
@@ -692,7 +723,7 @@ class Bisecter:
                                  " the automated bisection.\n")
                 sys.exit(-1)
             self._save_state()
-        self._value()
+        self._print_complete_status()
 
     def arguments(self):
         """
@@ -728,7 +759,7 @@ class Bisecter:
         print(self.bisection.log())
         if self.bisection.variants_left() == 0:
             print("Bisection complete, last good combination:")
-            self._value()
+            print(self._current_value())
 
     def reset(self):
         """
