@@ -18,6 +18,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from unittest import mock
 import unittest
 
 import bisecter
@@ -54,8 +55,10 @@ class BisectionsTest(unittest.TestCase):
             current = bisect.current()
             while current is not None:
                 if condition(current):
+                    #import pydevd; pydevd.settrace("127.0.0.1", True, True)
                     current = bisect.good()
                 else:
+                    #import pydevd; pydevd.settrace("127.0.0.1", True, True)
                     current = bisect.bad()
             act = bisect.current()
             self.assertEqual(exp, act)
@@ -67,132 +70,67 @@ class BisectionsTest(unittest.TestCase):
             print(bisect.log())
             raise
 
-    def test_basic_workflows(self):
-        """ Basic bisect workflow """
+    def test_bisections(self):
+        """ First-fail mode of the bisection """
         args = [list(range(10)), "abcdefghijklmno", list(range(0, 130, 10))]
+        self.basic_workflow(args, lambda x: not(x[0] > 5 and x[1] > 3),
+                            [6, 4, 0])
         # No matching (should not happen but is a valid input)
-        self.basic_workflow(args, lambda x: False, [0, 0, 0])
+        self.basic_workflow(args, lambda _: False, [0, 0, 1])
         # Only 0, 0, 0 is matching
-        self.basic_workflow(args, lambda x: x == [0, 0, 0], [0, 0, 0])
+        self.basic_workflow(args, lambda x: x == [0, 0, 0], [0, 0, 1])
         # Single parameter affects bisection
-        self.basic_workflow(args, lambda x: x[0] <= 1, [1, 14, 12])
-        self.basic_workflow(args, lambda x: x[0] <= 2, [2, 14, 12])
-        self.basic_workflow(args, lambda x: x[0] <= 3, [3, 14, 12])
-        self.basic_workflow(args, lambda x: x[0] <= 4, [4, 14, 12])
-        self.basic_workflow(args, lambda x: x[0] <= 5, [5, 14, 12])
-        self.basic_workflow(args, lambda x: x[0] <= 6, [6, 14, 12])
-        self.basic_workflow(args, lambda x: x[0] <= 7, [7, 14, 12])
-        self.basic_workflow(args, lambda x: x[0] <= 8, [8, 14, 12])
+        self.basic_workflow(args, lambda x: x[0] <= 1, [2, 0, 0])
+        self.basic_workflow(args, lambda x: x[0] <= 2, [3, 0, 0])
+        self.basic_workflow(args, lambda x: x[0] <= 3, [4, 0, 0])
+        self.basic_workflow(args, lambda x: x[0] <= 4, [5, 0, 0])
+        self.basic_workflow(args, lambda x: x[0] <= 5, [6, 0, 0])
+        self.basic_workflow(args, lambda x: x[0] <= 6, [7, 0, 0])
+        self.basic_workflow(args, lambda x: x[0] <= 7, [8, 0, 0])
+        self.basic_workflow(args, lambda x: x[0] <= 8, [9, 0, 0])
+        # Only last one is failing
         self.basic_workflow(args, lambda x: x[0] <= 9, [9, 14, 12])
-        # Combination of parameters affect bisection
+        # Combination of parameters affect bisection together
         self.basic_workflow(args, lambda x: x[0] <= 5 and x[1] <= 3,
-                            [5, 3, 12])
+                            [0, 4, 0])
         self.basic_workflow(args,
                             lambda x: x[0] <= 5 and x[1] <= 3 and x[2] <= 7,
-                            [5, 3, 7])
+                            [0, 0, 8])
+        # Combination of parameters affect bisection independently
+        self.basic_workflow(args, lambda x: x[0] <= 5 or x[1] <= 3,
+                            [6, 4, 0])
+        self.basic_workflow(args,
+                            lambda x: x[0] <= 5 or x[1] <= 3 or x[2] <= 7,
+                            [6, 4, 8])
         # All goods
         self.basic_workflow(args, lambda _: True, [9, 14, 12])
-
-    def test_value(self):
-        """Ensures the reported values are correct"""
-        args = [list(range(10)), "abcdefghijklmno", [0, 0, 0, 0, 1, 1, 2]]
-        bisect = bisecter.Bisections(args)
-        self.assertEqual([4, "a", 0], bisect.value())
-        bisect.good()
-        self.assertEqual([7, "a", 0], bisect.value())
-        bisect.bad()
-        self.assertEqual([6, "a", 0], bisect.value())
-        bisect.good()
-        self.assertEqual([6, "h", 0], bisect.value())
-        bisect.bad()
-        self.assertEqual([6, "d", 0], bisect.value())
-        bisect.good()
-        self.assertEqual([6, "f", 0], bisect.value())
-        bisect.good()
-        self.assertEqual([6, "g", 0], bisect.value())
-        bisect.good()
-        self.assertEqual([6, "g", 0], bisect.value())
-        bisect.good()
-        self.assertEqual([6, "g", 1], bisect.value())
-        # Second to last bisection reports 4th element
-        self.assertEqual([6, 6, 4], bisect.bad())
-        self.assertEqual([6, "g", 1], bisect.value())
-        # Last correct bisection reports None
-        self.assertEqual(None, bisect.bad())
-        # And the value should be the last good one
-        self.assertEqual([6, "g", 0], bisect.value())
-        # Repeating bad or good should not affect the bisection further
-        self.assertEqual(None, bisect.bad())
-        self.assertEqual([6, "g", 0], bisect.value())
-        self.assertEqual(None, bisect.good())
-        self.assertEqual([6, "g", 0], bisect.value())
-        self.assertEqual([1, "b", 0], bisect.value([1,1,1]))
-        self.assertEqual([7, "f", 2], bisect.value([7,5,-1]))
-        self.assertRaises(IndexError, bisect.value, [1,1,100])
-
-    def test_skip(self):
-        args = [list(range(10)), "abcdefghijklmno", [0, 0, 0, 0, 1, 1, 2]]
-        bisect = bisecter.Bisections(args)
-        for action, exp in [(bisect.skip, [3, 0, 0]),
-                            (bisect.skip, [5, 0, 0]),
-                            (bisect.skip, [2, 0, 0]),
-                            (bisect.skip, [6, 0, 0]),
-                            (bisect.skip, [1, 0, 0]),
-                            (bisect.skip, [7, 0, 0]),
-                            (bisect.skip, [0, 7, 0]),
-                            (bisect.good, [0, 11, 0]),
-                            (bisect.skip, [0, 10, 0]),
-                            (bisect.bad, [0, 9, 0]),
-                            (bisect.skip, [0, 8, 0]),
-                            (bisect.skip, [0, 7, 3]),
-                            (bisect.good, [0, 7, 5]),
-                            (bisect.bad, [0, 7, 4]),
-                            (bisect.skip, [0, 7, 3]),]:
-            action()
-            self.assertEqual(exp, bisect.current(), f"{exp} != {bisect.value()}"
-                             f"\n\n{bisect.log()}")
-        self.assertEqual(None, bisect.good())
-        self.assertEqual(None, bisect.bad())
-        self.assertEqual(None, bisect.skip())
-
-    def test_steps(self):
-        args = [list(range(10)), "abcdefghijklmno", [0, 0, 0, 0, 1, 1, 2]]
-        bisect = bisecter.Bisections(args)
-        self.assertEqual(11, bisect.steps_left())
-        self.assertEqual(31, bisect.variants_left())
-        bisect.good()
-        self.assertEqual(10, bisect.steps_left())
-        self.assertEqual(26, bisect.variants_left())
-        bisect.bad()
-        self.assertEqual(9, bisect.steps_left())
-        self.assertEqual(24, bisect.variants_left())
-        bisect.bad()
-        bisect.bad()
-        bisect.bad()
-        self.assertEqual(6, bisect.steps_left())
-        self.assertEqual(14, bisect.variants_left())
-        bisect.good()
-        bisect.good()
-        bisect.good()
-        self.assertEqual(3, bisect.steps_left())
-        self.assertEqual(6, bisect.variants_left())
-        bisect.bad()
-        self.assertEqual(2, bisect.steps_left())
-        self.assertEqual(3, bisect.variants_left())
-        bisect.bad()
-        self.assertEqual(0, bisect.steps_left())
-        self.assertEqual(0, bisect.variants_left())
-        bisect.good()
-        self.assertEqual(0, bisect.steps_left())
-        self.assertEqual(0, bisect.variants_left())
 
 
 class BisectionTest(unittest.TestCase):
     def test_value(self):
         bisect = bisecter.Bisection("asdf")
-        self.assertEqual("a", bisect.value())
+        self.assertEqual("f", bisect.value())
         bisect.reset()
         self.assertEqual("s", bisect.value())
+
+
+class BisecterMockedTest(unittest.TestCase):
+    def test_extended_args(self):
+        def join_args(*args):
+            return f'called with {args}'
+        eargs = ['1,2,3', 'range(100,110,2)', 'url://some_page',
+                 'beaker://Distro:-10']
+        with mock.patch('bisecter.range_beaker', join_args):
+            with mock.patch('bisecter.range_url', join_args):
+                bisect = bisecter.Bisecter()
+                # Only check the range_* functions are called, those features
+                # are tested in test_utils
+                self.assertEqual([['1', '2', '3'],
+                                  ['100', '102', '104', '106', '108'],
+                                  "called with ('url://some_page',)",
+                                  "called with ('beaker://Distro:-10',)"],
+                                  bisect._parse_extended_args(eargs))
+
 
 class BisecterTest(unittest.TestCase):
     def setUp(self):
@@ -202,58 +140,55 @@ class BisecterTest(unittest.TestCase):
 
     def test_basic_workflow(self):
         bisect = self.bisect
-        out = subprocess.run(f"{bisect} start -E 'range(100)' 'range(100)' "
-                             "'range(0,100,    1   )'", capture_output=True,
-                             check=True, shell=True)
-        self.assertIn(b"49 0 0", out.stdout)
+        out = subprocess.run(f"{bisect} start -E 'range(100)' "
+                             "'range(100)' 'range(0,100,    1   )'",
+                             capture_output=True, check=True, shell=True)
+        self.assertIn(b"0 99 99", out.stdout)
         out = subprocess.run(f"{bisect} bad", capture_output=True, check=True,
                              shell=True)
-        self.assertIn(b"24 0 0", out.stdout)
-        out = subprocess.run(f"{bisect} bad", capture_output=True, check=True,
-                             shell=True)
-        self.assertIn(b"12 0 0", out.stdout)
-        out = subprocess.run(f"{bisect} bad", capture_output=True, check=True,
-                             shell=True)
-        self.assertIn(b"6 0 0", out.stdout)
+        self.assertIn(b"0 0 99", out.stdout)
         out = subprocess.run(f"{bisect} good", capture_output=True, check=True,
                              shell=True)
-        self.assertIn(b"9 0 0", out.stdout)
-        out = subprocess.run(f"{bisect} good", capture_output=True, check=True,
-                             shell=True)
-        self.assertIn(b"11 0 0", out.stdout)
+        self.assertIn(b"0 49 99", out.stdout)
         out = subprocess.run(f"{bisect} bad", capture_output=True, check=True,
                              shell=True)
-        self.assertIn(b"10 0 0", out.stdout)
+        self.assertIn(b"0 24 99", out.stdout)
         out = subprocess.run(f"{bisect} bad", capture_output=True, check=True,
                              shell=True)
-        self.assertIn(b"9 49 0", out.stdout)
+        self.assertIn(b"0 12 99", out.stdout)
+        out = subprocess.run(f"{bisect} bad", capture_output=True, check=True,
+                             shell=True)
+        self.assertIn(b"0 6 99", out.stdout)
+        out = subprocess.run(f"{bisect} bad", capture_output=True, check=True,
+                             shell=True)
+        self.assertIn(b"0 3 99", out.stdout)
         out = subprocess.run(f"{bisect} skip", capture_output=True, check=True,
                              shell=True)
-        self.assertIn(b"9 48 0", out.stdout)
+        self.assertIn(b"0 2 99", out.stdout)
         out = subprocess.run(f"{bisect} run {TEST_SH_PATH}",
                              capture_output=True, check=True, shell=True)
-        self.assertIn(b"9 3 76", out.stdout)
+        self.assertIn(b"0 1 77", out.stdout)
         out = subprocess.run(f"{bisect} args", capture_output=True, check=True,
                              shell=True)
-        self.assertIn(b"9 3 76", out.stdout)
-        out = subprocess.run(f"{bisect} args -r 9-8-7", capture_output=True,
+        self.assertIn(b"0 1 77", out.stdout)
+        out = subprocess.run(f"{bisect} args -r -i 9-8-7", capture_output=True,
                              check=True, shell=True)
         self.assertIn(b"['9', '8', '7']", out.stdout)
-        out = subprocess.run(f"{bisect} args 9999-999",
+        out = subprocess.run(f"{bisect} args -i 9999-999",
                              capture_output=True, check=False, shell=True)
         self.assertEqual(out.returncode, 255)
         self.assertIn(b"Incorrect id", out.stderr)
         out = subprocess.run(f"{bisect} id", capture_output=True, check=True,
                              shell=True)
-        self.assertIn(b"9-3-76", out.stdout)
+        self.assertIn(b"0-1-77", out.stdout)
         out = subprocess.run(f"{bisect} log", capture_output=True, check=True,
                              shell=True)
-        self.assertEqual(out.stdout.count(b'\n'), 112, "Incorrect number of "
+        self.assertEqual(out.stdout.count(b'\n'), 21, "Incorrect number of "
                          f"lines in:\n{out.stdout}")
         out = subprocess.run(f"{bisect} good", capture_output=True, check=True,
                              shell=True)
         self.assertIn(b"Bisection complete", out.stdout)
-        self.assertIn(b"9 3 76", out.stdout)
+        self.assertIn(b"0 1 77", out.stdout)
         out = subprocess.run(f"{bisect} start foo", capture_output=True,
                              check=False, shell=True)
         self.assertEqual(out.returncode, 255)
@@ -270,7 +205,7 @@ class BisecterTest(unittest.TestCase):
 
     def test_run_with_interruption(self):
         bisect = self.bisect
-        out = subprocess.run(f"{bisect} start 1,1,1,1,1,FAILURE 0 0",
+        out = subprocess.run(f"{bisect} start 1,1,1,1,FAILURE,1 0 0",
                              capture_output=True, check=True, shell=True)
         self.assertIn(b'1 0 0', out.stdout)
         out = subprocess.run(f"{bisect} run {TEST_SH_PATH}",
@@ -278,7 +213,7 @@ class BisecterTest(unittest.TestCase):
         self.assertIn(b"returned 135, interrupting", out.stderr)
         out = subprocess.run(f"{bisect} log", capture_output=True, check=True,
                              shell=True)
-        self.assertEqual(out.stdout.count(b'\n'), 2, "Incorrect number of "
+        self.assertEqual(out.stdout.count(b'\n'), 4, "Incorrect number of "
                          f"lines in:\n{out.stdout}")
 
     def test_incorrect_files(self):
@@ -318,13 +253,13 @@ class BisecterTest(unittest.TestCase):
             yaml_fd.write(b"[[1, 2, 3], [4, 5]]")
         out = subprocess.run(f"{bisect} start --from-yaml {yaml_path}",
                              capture_output=True, check=True, shell=True)
-        self.assertIn(b'2 4', out.stdout)
+        self.assertIn(b'1 5', out.stdout)
         self.assertNotIn(b"WARNING", out.stderr)
         subprocess.run(f"{bisect} reset", capture_output=True, check=True,
                        shell=True)
         out = subprocess.run(f"{bisect} start --from-yaml {yaml_path} 1,2,3",
                              capture_output=True, check=True, shell=True)
-        self.assertIn(b'2 4', out.stdout)
+        self.assertIn(b'1 5', out.stdout)
         self.assertIn(b"WARNING", out.stderr)
         subprocess.run(f"{bisect} reset", capture_output=True, check=True,
                        shell=True)
