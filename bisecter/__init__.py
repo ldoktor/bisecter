@@ -12,14 +12,14 @@
 #
 # Copyright: Red Hat Inc. 2023
 # Author: Lukas Doktor <ldoktor@redhat.com>
-import itertools
-
 """Tool to drive bisection over multiple set of arguments"""
 
 import argparse
 import ast
 import dataclasses
 import enum
+import itertools
+import json
 import math
 import os
 import pickle
@@ -27,6 +27,8 @@ import pipes
 import re
 import subprocess
 import sys
+import urllib.parse
+import urllib.request
 
 
 class BisectionStatus(enum.Enum):
@@ -289,8 +291,83 @@ class Bisections:
         return('\n'.join(str(entry) for entry in self._log))
 
 
+def esplit(sep, line, maxsplit=0):
+    """Split line by {sep} allowing \\ escapes"""
+    return [_.replace(f'\\{sep}', sep)
+            for _ in re.split(f'(?<!\\\\){sep}', line, maxsplit)]
+
+
+def range_beaker(arg, arch="x86_64", extra_args=None):
     """
+    Parse argument into list of distros
+
+    :param arg: Query for beaker, eg.:
+                * beaker://RHEL-9 (all RHEL-9% distros)
+                * beaker://RHEL-9.1:-10 (latest 10 RHEL-9.1%)
+                * beaker://RHEL-8.1.0:RHEL-8.2.0 (all revisions between)
+                * beaker://RHEL-8.1.0:RHEL-8.2.0:-100 (ditto but max 100)
+    :return: List of distros (eg.:
+        ['Distro-1.2.0-20230110', 'Distro-1.2.0-20230109'])
     """
+
+    def parse_arg(arg):
+        args = esplit(':', arg[9:], 2)
+        limit = 100
+        if len(args) == 3:
+            return args[0], args[1], int(args[2])
+        if len(args) == 2:
+            if args[1].startswith('-'):
+                return args[0], None, int(args[1][1:])
+            return args[0], args[1], limit
+        if len(args) == 1:
+            return args[0], None, limit
+        raise ValueError("No distro specified")
+
+    def get_common(first, last):
+        """
+        Get common part of first and last, adding n/d for nightly/daily builds
+        """
+        if last:
+            common = ''.join(char[0] for char in itertools.takewhile(
+                lambda _: _[0] == _[1], zip(first, last)))
+            if 'n' in first and 'n' in last:
+                return common + '%n%'
+            if 'd' in first and 'd' in last:
+                return common + '%n%'
+            return common + '%'
+        if 'n' in first:
+            return first + '%n%'
+        if 'd' in first:
+            return first + '%d%'
+        return first + '%'
+
+    def distros_from_bkr_json(distros, first, last):
+        idistros = iter(distros)
+        out = []
+        # Look for first
+        for distro in idistros:
+            dist = distro.get("distro_name")
+            if dist and dist.startswith(first):
+                out.append(dist)
+                break
+        # Add all distros until last
+        for distro in idistros:
+            if not distro.get("distro_name"):
+                continue
+            if distro["distro_name"] not in out:
+                out.append(distro["distro_name"])
+            if last and distro["distro_name"].startswith(last):
+                break
+        return out
+
+    if extra_args is None:
+        extra_args = []
+    first, last, limit = parse_arg(arg)
+    common = get_common(first, last)
+    ret = subprocess.run(["bkr", "distro-trees-list", "--arch", arch, "--name",
+                          common, "--limit", str(limit), '--format', 'json']
+                          +extra_args, capture_output=True, check=True)
+    return distros_from_bkr_json(json.loads(ret.stdout), first, last)
 
 
 class Bisecter:
@@ -420,8 +497,15 @@ class Bisecter:
         re_range = re.compile(r'(range\((\d+)(,\s*\d+\s*)?(,\s*\d+\s*)?\))')
         args = []
         for arg in arguments:
-            line = re_range.sub(range_repl, arg)
-            args.append(self._split_by_comma(line))
+            if arg.startswith("beaker://"):
+                parsed_args = range_beaker(arg)
+            else:
+                line = re_range.sub(range_repl, arg)
+                parsed_args = self._split_by_comma(line)
+            if not parsed_args:
+                raise ValueError(f"Extended argument {arg} resulted in empty "
+                                 "list.")
+            args.append(parsed_args)
         return args
 
     @staticmethod
