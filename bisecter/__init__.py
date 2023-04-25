@@ -478,7 +478,10 @@ class Bisecter:
 
         def variant_id(arg):
             """Parse variant ID"""
+            if arg in ('good', 'bad'):
+                return arg
             return [int(_) for _ in arg.split('-')]
+
         parser = argparse.ArgumentParser(prog='Bisecter', description='Allows '
                                          'to bisect over arbitrary number of '
                                          'arguments.')
