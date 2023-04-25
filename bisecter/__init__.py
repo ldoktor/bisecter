@@ -713,14 +713,18 @@ class Bisecter:
         bret = True
         while bret is not None:
             self._report_remaining_steps()
+            # TODO: Add support for {0} {1} {2} (eg. cmd --foo {1} --bar {2})
             args = self.args.command + self.bisection.value()
-            sys.stderr.write(f"Running {args}\n")
+            sys.stderr.write(f"Bisecter: Running: {args}\n")
             ret = subprocess.run(args, check=False)
             if ret.returncode == 0:
+                sys.stderr.write(f"Bisecter: GOOD {self._current_value()}\n")
                 bret = self.bisection.good()
             elif ret.returncode == 125:
+                sys.stderr.write(f"Bisecter: SKIP {self._current_value()}\n")
                 bret = self.bisection.skip()
             elif ret.returncode <= 127:
+                sys.stderr.write(f"Bisecter: BAD {self._current_value()}\n")
                 bret = self.bisection.bad()
             else:
                 self._save_state()
