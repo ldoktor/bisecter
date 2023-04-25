@@ -516,8 +516,11 @@ class Bisecter:
                                      '\'your_script "$(bisecter args)"\' (use '
                                      'the " quotation to preserve special '
                                      'characters).')
-        args.add_argument('id', help='Id of the variant which arguments you '
-                          'are interested in (current)', nargs='?',
+        args.add_argument('axis', help='Optionally select only one axis'
+                          'index to report arguments of', type=int,
+                          nargs='?')
+        args.add_argument('--id', '-i', help='Id of the variant which '
+                          'arguments you are interested in (current)',
                           type=variant_id)
         args.add_argument('--raw', '-r', help="Report raw arguments in "
                           "python format", action='store_true')
@@ -731,14 +734,23 @@ class Bisecter:
         """
         self._load_state()
         if self.args.id:
-            variant = self.args.id
+            if self.args.id == 'good':
+                variant = [0] * len(self.bisection.args)
+            elif self.args.id == 'bad':
+                variant = [-1] * len(self.bisection.args)
+            else:
+                variant = self.args.id
         else:
             variant = None
         try:
-            if self.args.raw:
-                print(self.bisection.value(variant))
+            if self.args.axis is not None:
+                out = self.bisection.value(variant)[self.args.axis]
+                print(out)
             else:
-                self._value(variant)
+                if self.args.raw:
+                    print(self.bisection.value(variant))
+                else:
+                    print(self._current_value(variant))
         except IndexError:
             sys.stderr.write("Incorrect id "
                              f"{'-'.join(str(_) for _ in variant)}\n")
