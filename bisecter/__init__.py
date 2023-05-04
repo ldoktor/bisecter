@@ -280,11 +280,15 @@ class Bisections:
 
     def steps_left(self):
         """Report how many steps to test"""
-        return sum(_.steps_left() for _ in self.args)
+        return (sum(_.steps_left() for _ in self.args) +
+                len(self.args) - self._active)
 
     def variants_left(self):
         """Report how many variants to test"""
-        return sum(_.variants_left() for _ in self.args)
+        variants = [_.variants_left() for _ in self.args[self._active:]]
+        if not variants:
+            return 0
+        return math.prod(variants)
 
     def log(self):
         """Report bisection log"""
