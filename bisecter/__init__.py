@@ -496,6 +496,9 @@ class Bisecter:
                            'comma separated arguments allow certain evals, '
                            'eg. foo,range(10,31,10),bar becomes ["foo", "10", '
                            '"20", "30", "bar"]', action='store_true')
+        start.add_argument('--dry-run', help='Do not actually start bisection,'
+                           'only parse the arguments and report the axis',
+                           action='store_true')
         start.add_argument('arguments', help='Specify one or multiple comma '
                            'separated lists of values this bisection will '
                            'iterate over; bisecter assumes '
@@ -644,6 +647,9 @@ class Bisecter:
             sys.exit(-1)
         self._report_remaining_steps()
         self._report_detailed_stats()
+        if self.args.dry_run:
+            print("Bisection not started, running in --dry-run mode")
+            return
         self._save_state()
         print(self._current_value())
 
