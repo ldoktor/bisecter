@@ -105,6 +105,30 @@ class BisectionsTest(unittest.TestCase):
         # All goods
         self.basic_workflow(args, lambda _: True, [9, 14, 12])
 
+    def test_sparse_axis(self):
+        args = [[1], [2], [3], [4, 5], [6], [7,8], 'ABC', [9], 'DEF', [10, 11]]
+        bisect = bisecter.Bisections(args)
+        # Skip axis 0 1 2, investigate axis 3
+        self.assertEqual([1, 2, 3, 4, 6, 8, 'C', 9, 'F', 11], bisect.value())
+        bisect.good()
+        # Move to axis 5
+        self.assertEqual([1, 2, 3, 5, 6, 7, 'C', 9, 'F', 11], bisect.value())
+        bisect.bad()
+        # Move to axis 6
+        self.assertEqual([1, 2, 3, 5, 6, 7, 'A', 9, 'F', 11], bisect.value())
+        bisect.bad()
+        # Skip axis 7 and start axis 8
+        self.assertEqual([1, 2, 3, 5, 6, 7, 'A', 9, 'D', 11], bisect.value())
+        bisect.good()
+        # Investigate axis 8
+        self.assertEqual([1, 2, 3, 5, 6, 7, 'A', 9, 'E', 11], bisect.value())
+        bisect.good()
+        # Finish axis 8 and move to axis 9
+        self.assertEqual([1, 2, 3, 5, 6, 7, 'A', 9, 'F', 10], bisect.value())
+        bisect.good()
+        # Bisection complete, first bad should be...
+        self.assertEqual([1, 2, 3, 5, 6, 7, 'A', 9, 'F', 11], bisect.value())
+
 
 class BisectionTest(unittest.TestCase):
     def test_value(self):
@@ -213,7 +237,7 @@ class BisecterTest(unittest.TestCase):
         self.assertIn(b"returned 135, interrupting", out.stderr)
         out = subprocess.run(f"{bisect} log", capture_output=True, check=True,
                              shell=True)
-        self.assertEqual(out.stdout.count(b'\n'), 6, "Incorrect number of "
+        self.assertEqual(out.stdout.count(b'\n'), 3, "Incorrect number of "
                          f"lines in:\n{out.stdout}")
 
     def test_incorrect_files(self):

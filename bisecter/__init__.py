@@ -172,9 +172,8 @@ class Bisections:
                                        [0 for _ in args]),
                      BisectionLogEntry(BisectionStatus.BAD,
                                        [len(_) - 1 for _ in args])]
-        self._active = 0
-        if self.args:
-            self.args[0].current = 0
+        self._active = -1
+        self._postprocess_current(None)
 
     def current(self):
         """Reports the current variant indexes"""
@@ -198,7 +197,7 @@ class Bisections:
             # It won't reproduce with the first argument, which means we have
             # to investigate this item. Reset it and start bisection
             self.args[self._active].reset()
-            return self.current()
+            return self._postprocess_current(0)
         this = self.args[self._active].good()
         return self._postprocess_current(this)
 
@@ -286,7 +285,7 @@ class Bisections:
 
     def variants_left(self):
         """Report how many variants to test"""
-        variants = [_.variants_left() for _ in self.args[self._active:]]
+        variants = [_.variants_left() or 1 for _ in self.args[self._active:]]
         if not variants:
             return 0
         return math.prod(variants)
