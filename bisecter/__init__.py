@@ -385,10 +385,12 @@ def range_url(arg):
         * url://example.org:kernel:6.0.7 (ditto but start from 6.0.7)
         * url://example.org:kernel:6.0.7:6.1.9
           (links between 6.0.7 and 6.1.9)
-        * url://example.org:kernel:+3 (first 3 links containing kernel)
-        * url://example.org:kernel:-3 (last 3 links containing kernel)
-        * url://example.org:kernel:+3:-2
+        * url://example.org:kernel:+3 (skip first 3 links)
+        * url://example.org:kernel:-3 (skip last 3 links)
+        * url://example.org:kernel:+3:-2 (skip first 3 and last 2)
           (links_containing_kernel[3:-2])
+        * url://example.org:kernel:+0:+5 (report first 5 links - using +/- is
+          mandatory!) (links_containing_kernel[:5])
 
     :return: list of individual links (eg.:
         ["example.org/foo", "example.org/bar"])
