@@ -30,6 +30,7 @@ import sys
 import urllib.parse
 import urllib.request
 
+from . import utils
 
 class BisectionStatus(enum.Enum):
     """Bisection status"""
@@ -521,6 +522,12 @@ class Bisecter:
                                     'code 0 means good; 1 - 124 and 126 - 127 '
                                     'means bad; 125 means skip; 128 - 255 '
                                     'means interrupt the bisection.')
+        run.add_argument("--template", "-t", action="store_true", help="Allows"
+                         " to use a simple templating in the to-be-executed "
+                         "command which replaces {\\d} entries for bisection "
+                         "values using the \\d number as index (allowing "
+                         "negative values). Use double brackets to skip "
+                         "the replacement.")
         run.add_argument('command', help='Command to be executed',
                          nargs=argparse.REMAINDER)
         args = subparsers.add_parser('args', help='Report the variant '
@@ -731,12 +738,21 @@ class Bisecter:
         """
         Keep executing args.command using it's exit code to drive the bisection
         """
+        def get_cmd():
+            if self.args.template:
+                try:
+                    return utils.simple_template(self.args.command,
+                                                 self.bisection.value())
+                except utils.ReplaceIndexError as exc:
+                    sys.stderr.write(f"{exc}\n")
+                    sys.exit(-1)
+            return self.args.command + self.bisection.value()
+
         self._load_state()
         bret = True
         while bret is not None:
             self._report_remaining_steps()
-            # TODO: Add support for {0} {1} {2} (eg. cmd --foo {1} --bar {2})
-            args = self.args.command + self.bisection.value()
+            args = get_cmd()
             sys.stderr.write(f"Bisecter: Running: {args}\n")
             ret = subprocess.run(args, check=False)
             if ret.returncode == 0:
