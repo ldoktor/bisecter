@@ -69,7 +69,7 @@ class Bisection:
     _bad = None
 
     def __init__(self, values):
-        self._values = values
+        self.values = values
         self.current = self._first_bad = self.last_index = len(values) - 1
         self._good = 0
         self._bad = self.last_index
@@ -80,8 +80,8 @@ class Bisection:
     def value(self, index=None):
         """Value associated to the ``index`` value (by default current one)"""
         if index is not None:
-            return self._values[index]
-        return self._values[self.current]
+            return self.values[index]
+        return self.values[self.current]
 
     def update_current(self):
         """Update current according to good and bad"""
@@ -148,7 +148,7 @@ class Bisection:
     def variants_left(self):
         """Report the number of variants"""
         if self._bad is None:
-            return len(self._values)
+            return len(self.values)
         return self._bad - self._good - len(self._skips)
 
     def reset(self, good=None, bad=None):
@@ -642,6 +642,8 @@ class Bisecter:
             sys.stderr.write(f"Bisection in '{self.args.state_file}' already "
                              "in progress\n")
             sys.exit(-1)
+        self._report_remaining_steps()
+        self._report_detailed_stats()
         self._save_state()
         print(self._current_value())
 
@@ -658,6 +660,14 @@ class Bisecter:
         sys.stderr.write(f"Bisecter: {self.bisection.variants_left()} variants"
                          " left to test after this (roughly "
                          f"{self.bisection.steps_left()} steps)\n")
+
+    def _report_detailed_stats(self):
+        """
+        Report details about axis
+        """
+        for i, axis in enumerate(self.bisection.args):
+            sys.stderr.write(f"{i} ({len(axis.values)}): "
+                             f"{','.join(str(_) for _ in axis.values)}\n")
 
     def status(self):
         """
