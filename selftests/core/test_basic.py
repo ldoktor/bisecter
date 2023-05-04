@@ -213,7 +213,7 @@ class BisecterTest(unittest.TestCase):
         self.assertIn(b"returned 135, interrupting", out.stderr)
         out = subprocess.run(f"{bisect} log", capture_output=True, check=True,
                              shell=True)
-        self.assertEqual(out.stdout.count(b'\n'), 4, "Incorrect number of "
+        self.assertEqual(out.stdout.count(b'\n'), 6, "Incorrect number of "
                          f"lines in:\n{out.stdout}")
 
     def test_incorrect_files(self):
