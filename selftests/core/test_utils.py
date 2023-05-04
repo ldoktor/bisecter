@@ -13,9 +13,7 @@
 # Copyright: Red Hat Inc. 2020
 # Author: Lukas Doktor <ldoktor@redhat.com>
 
-import bisecter
 import os
-from unittest import mock
 import unittest
 import json
 
@@ -38,59 +36,60 @@ class Utils(unittest.TestCase):
         # Check it won't fail (ignore bkr call/limit for now)
         with open(os.path.join(os.path.dirname(__file__), 'assets',
                   'bkr.json'), 'rb') as fd_bkr:
-            ret = mock.Mock()
+            ret = unittest.mock.Mock()
             ret.stdout = fd_bkr.read()
-            bkr = mock.Mock()
+            bkr = unittest.mock.Mock()
             bkr.return_value = ret
         distros = ['Distro-1.2.0-20230110', 'Distro-1.2.0-20230109',
                    'Distro-1.2.0-20230108', 'Distro-1.2.0-20230107',
                    'Distro-1.2.0-20230106', 'Distro-1.2.0-20230105',
                    'Distro-1.2.0-20230104']
-        with mock.patch('bisecter.subprocess.run', bkr):
+        with unittest.mock.patch('bisecter.subprocess.run', bkr):
             self.assertEqual(distros,
-                             bisecter.range_beaker("beaker://Distro-"))
-            self.assertEqual(distros[:-2], bisecter.range_beaker(
+                             utils.range_beaker("beaker://Distro-"))
+            self.assertEqual(distros[:-2], utils.range_beaker(
                 "beaker://Distro-1.2:Distro-1.2.0-20230106"))
-            self.assertEqual(distros, bisecter.range_beaker(
+            self.assertEqual(distros, utils.range_beaker(
                 "beaker://Distro-1.2:-3"))
-            self.assertEqual(distros[3:-1], bisecter.range_beaker(
+            self.assertEqual(distros[3:-1], utils.range_beaker(
                 "beaker://Distro-1.2.0-20230107:Distro-1.2.0-20230105:7"))
 
     def test_range_url(self):
         self.maxDiff = None
         with open(os.path.join(os.path.dirname(__file__), 'assets',
                   'koji-kernel.html'), 'rb') as fd_html:
-            req = mock.Mock()
+            req = unittest.mock.Mock()
             req.read.return_value = fd_html.read()
-            urlopen = mock.MagicMock()
+            urlopen = unittest.mock.MagicMock()
             urlopen.return_value.__enter__.return_value = req
         with open(os.path.join(os.path.dirname(__file__), 'assets',
                   'koji-kernel-links.json'), 'r', encoding='utf-8') as fd_urls:
             urls = json.load(fd_urls)
-        with mock.patch('bisecter.urllib.request.urlopen', urlopen):
-            self.assertEqual(135, len(bisecter.range_url(
+        with unittest.mock.patch('bisecter.utils.urllib.request.urlopen',
+                                 urlopen):
+            self.assertEqual(135, len(utils.range_url(
                 'url://https\\://koji.fedoraproject.org/koji//packageinfo?'
                 'packageID=8')))
-            self.assertEqual(urls, bisecter.range_url(
+            self.assertEqual(urls, utils.range_url(
                 'url://https\\://koji.fedoraproject.org/koji//packageinfo?'
                 'packageID=8:kernel-\\d'))
-            self.assertEqual(urls[4:], bisecter.range_url(
+            self.assertEqual(urls[4:], utils.range_url(
                 'url://https\\://koji.fedoraproject.org/koji//packageinfo?'
                 'packageID=8:kernel-\\d:+4'))
-            self.assertEqual(urls[-4:], bisecter.range_url(
+            self.assertEqual(urls[-4:], utils.range_url(
                 'url://https\\://koji.fedoraproject.org/koji//packageinfo?'
                 'packageID=8:kernel-\\d:-4'))
-            self.assertEqual(urls[-8:4], bisecter.range_url(
+            self.assertEqual(urls[-8:4], utils.range_url(
                 'url://https\\://koji.fedoraproject.org/koji//packageinfo?'
                 'packageID=8:kernel-\\d:-8:+4'))
-            self.assertEqual(urls[-8:-2], bisecter.range_url(
+            self.assertEqual(urls[-8:-2], utils.range_url(
                 'url://https\\://koji.fedoraproject.org/koji//packageinfo?'
                 'packageID=8:kernel-\\d:-8:-2'))
-            self.assertEqual(urls[3:6], bisecter.range_url(
+            self.assertEqual(urls[3:6], utils.range_url(
                 'url://https\\://koji.fedoraproject.org/koji//packageinfo?'
                 'packageID=8:kernel-\\d:kernel-6.1.14-100.*:'
                 'kernel-6.1.14-200.*'))
-            self.assertEqual(urls[3:6], bisecter.range_url(
+            self.assertEqual(urls[3:6], utils.range_url(
                 'url://https\\://koji.fedoraproject.org/koji//packageinfo?'
                 'packageID=8:kernel-\\d:kernel-6.1.14-100.*:+6'))
 

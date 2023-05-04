@@ -15,11 +15,8 @@
 """Tool to drive bisection over multiple set of arguments"""
 
 import argparse
-import ast
 import dataclasses
 import enum
-import itertools
-import json
 import math
 import os
 import pickle
@@ -27,10 +24,9 @@ import pipes
 import re
 import subprocess
 import sys
-import urllib.parse
-import urllib.request
 
-from . import utils
+from bisecter import utils
+
 
 class BisectionStatus(enum.Enum):
     """Bisection status"""
@@ -295,162 +291,6 @@ class Bisections:
         return('\n'.join(str(entry) for entry in self._log))
 
 
-def esplit(sep, line, maxsplit=0):
-    """Split line by {sep} allowing \\ escapes"""
-    return [_.replace(f'\\{sep}', sep)
-            for _ in re.split(f'(?<!\\\\){sep}', line, maxsplit)]
-
-
-def range_beaker(arg, arch="x86_64", extra_args=None):
-    """
-    Parse argument into list of distros
-
-    :param arg: Query for beaker, eg.:
-                * beaker://RHEL-9 (all RHEL-9% distros)
-                * beaker://RHEL-9.1:-10 (latest 10 RHEL-9.1%)
-                * beaker://RHEL-8.1.0:RHEL-8.2.0 (all revisions between)
-                * beaker://RHEL-8.1.0:RHEL-8.2.0:-100 (ditto but max 100)
-    :return: List of distros (eg.:
-        ['Distro-1.2.0-20230110', 'Distro-1.2.0-20230109'])
-    """
-
-    def parse_arg(arg):
-        args = esplit(':', arg[9:], 2)
-        limit = 100
-        if len(args) == 3:
-            return args[0], args[1], int(args[2])
-        if len(args) == 2:
-            if args[1].startswith('-'):
-                return args[0], None, int(args[1][1:])
-            return args[0], args[1], limit
-        if len(args) == 1:
-            return args[0], None, limit
-        raise ValueError("No distro specified")
-
-    def get_common(first, last):
-        """
-        Get common part of first and last, adding n/d for nightly/daily builds
-        """
-        if last:
-            common = ''.join(char[0] for char in itertools.takewhile(
-                lambda _: _[0] == _[1], zip(first, last)))
-            if 'n' in first and 'n' in last:
-                return common + '%n%'
-            if 'd' in first and 'd' in last:
-                return common + '%n%'
-            return common + '%'
-        if 'n' in first:
-            return first + '%n%'
-        if 'd' in first:
-            return first + '%d%'
-        return first + '%'
-
-    def distros_from_bkr_json(distros, first, last):
-        idistros = iter(distros)
-        out = []
-        # Look for first
-        for distro in idistros:
-            dist = distro.get("distro_name")
-            if dist and dist.startswith(first):
-                out.append(dist)
-                break
-        # Add all distros until last
-        for distro in idistros:
-            if not distro.get("distro_name"):
-                continue
-            if distro["distro_name"] not in out:
-                out.append(distro["distro_name"])
-            if last and distro["distro_name"].startswith(last):
-                break
-        return out
-
-    if extra_args is None:
-        extra_args = []
-    first, last, limit = parse_arg(arg)
-    common = get_common(first, last)
-    ret = subprocess.run(["bkr", "distro-trees-list", "--arch", arch, "--name",
-                          common, "--limit", str(limit), '--format', 'json']
-                          +extra_args, capture_output=True, check=True)
-    return distros_from_bkr_json(json.loads(ret.stdout), first, last)
-
-
-def range_url(arg):
-    """
-    Parse argument into list of links
-
-    :param arg: Query a page for links (koji, python -m http.server, ...):
-
-        * url://example.org (all links from the page)
-        * url://example.org:kernel (links containing kernel)
-        * url://example.org:kernel:6.0.7 (ditto but start from 6.0.7)
-        * url://example.org:kernel:6.0.7:6.1.9
-          (links between 6.0.7 and 6.1.9)
-        * url://example.org:kernel:+3 (skip first 3 links)
-        * url://example.org:kernel:-3 (skip last 3 links)
-        * url://example.org:kernel:+3:-2 (skip first 3 and last 2)
-          (links_containing_kernel[3:-2])
-        * url://example.org:kernel:+0:+5 (report first 5 links - using +/- is
-          mandatory!) (links_containing_kernel[:5])
-
-    :return: list of individual links (eg.:
-        ["example.org/foo", "example.org/bar"])
-    """
-
-    def parse_arg(arg):
-        args = esplit(':', arg[6:], 3)
-        if len(args) < 4:
-            args += [None, ] * (4 - len(args))
-        for i in (2, 3):
-            if not args[i]:
-                continue
-            if args[i].startswith('+'):
-                args[i] = int(args[i])
-            elif args[i].startswith('-'):
-                args[i] = int(args[i])
-        return args
-
-    def get_filtered_links(page, filt):
-        with urllib.request.urlopen(page) as req:
-            content = req.read().decode('utf-8')
-        if filt is None:
-            filt = ''
-        return re.findall(f"href=\"([^\"]+)\"[^>]*>({filt}[^<]*)<", content)
-
-    def apply_ranges(links, first, last):
-        if isinstance(first, int):
-            offset1 = first
-            first = None
-        else:
-            offset1 = 0
-        if isinstance(last, int):
-            offset2 = last
-            last = None
-        else:
-            offset2 = None
-        ilinks = iter(links[offset1:offset2])
-        out = []
-        # Look for first
-        if first:
-            for link in ilinks:
-                if link[1] and re.match(first, link[1]):
-                    out.append(link[0])
-                    break
-        # Add all links until last
-        for link in ilinks:
-            if not link[0]:
-                continue
-            if link[0] not in out:
-                out.append(link[0])
-            if last and re.match(last, link[1]):
-                break
-        return out
-
-    page, filt, first, last = parse_arg(arg)
-    links = get_filtered_links(page, filt)
-    return [urllib.parse.urljoin(page, link)
-            for link in apply_ranges(links, first, last)]
-
-
 class Bisecter:
 
     """Cmdline app to drive bisection"""
@@ -594,9 +434,9 @@ class Bisecter:
         args = []
         for arg in arguments:
             if arg.startswith("beaker://"):
-                parsed_args = range_beaker(arg)
+                parsed_args = utils.range_beaker(arg)
             elif arg.startswith("url://"):
-                parsed_args = range_url(arg)
+                parsed_args = utils.range_url(arg)
             else:
                 line = re_range.sub(range_repl, arg)
                 parsed_args = self._split_by_comma(line)

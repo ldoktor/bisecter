@@ -144,8 +144,8 @@ class BisecterMockedTest(unittest.TestCase):
             return f'called with {args}'
         eargs = ['1,2,3', 'range(100,110,2)', 'url://some_page',
                  'beaker://Distro:-10']
-        with mock.patch('bisecter.range_beaker', join_args):
-            with mock.patch('bisecter.range_url', join_args):
+        with mock.patch('bisecter.utils.range_beaker', join_args):
+            with mock.patch('bisecter.utils.range_url', join_args):
                 bisect = bisecter.Bisecter()
                 # Only check the range_* functions are called, those features
                 # are tested in test_utils
