@@ -188,7 +188,7 @@ class Bisections:
         self._log.append(BisectionLogEntry(BisectionStatus.GOOD, current))
         if self._active >= len(self.args):
             return self._postprocess_current(None)
-        self.args[self._active].no_good = False
+        #self.args[self._active].no_good = False
         if self.args[self._active].current == 0:
             # It won't reproduce with the first argument, which means we have
             # to investigate this item. Reset it and start bisection
