@@ -125,10 +125,7 @@ class Bisection:
                 self.reset(self._first_bad, self._first_bad)
                 return None
             new += offset
-            # We iterate over multiple arrays and can not be sure the last
-            # one of each is bad
-            if new <= self._good or (new >= self._bad and
-                                     new != self.last_index):
+            if new <= self._good or new >= self._bad:
                 # We don't want to test good and bad, but we still want to
                 # test the remaining items up to the max offset
                 self._skips.append(new)
