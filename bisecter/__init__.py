@@ -566,8 +566,8 @@ class Bisecter:
                     print(f"{prefix}all tested combinations are "
                           "failing (is the first one really passing?)")
                 else:
-                    print(f"{prefix}failure is caused only by the "
-                          f"{axis[0]} axis, first bad combination is:")
+                    print(f"{prefix}failure is caused only by "
+                          f"axis {axis[0]}, first bad combination is:")
         else:
             print(f"{prefix}even the first (expected to be good) "
                   "combination reports failure:")
@@ -654,7 +654,7 @@ class Bisecter:
         self._load_state()
         print(self.bisection.log())
         if self.bisection.variants_left() == 0:
-            print("Bisection complete, last good combination:")
+            print("Bisection complete, first bad combination:")
             print(self._current_value())
 
     def reset(self):
