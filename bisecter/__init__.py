@@ -125,10 +125,7 @@ class Bisection:
                 self.reset(self._first_bad, self._first_bad)
                 return None
             new += offset
-            # We iterate over multiple arrays and can not be sure the last
-            # one of each is bad
-            if new <= self._good or (new >= self._bad and
-                                     new != self.last_index):
+            if new <= self._good or new >= self._bad:
                 # We don't want to test good and bad, but we still want to
                 # test the remaining items up to the max offset
                 self._skips.append(new)
@@ -188,7 +185,7 @@ class Bisections:
         self._log.append(BisectionLogEntry(BisectionStatus.GOOD, current))
         if self._active >= len(self.args):
             return self._postprocess_current(None)
-        self.args[self._active].no_good = False
+        #self.args[self._active].no_good = False
         if self.args[self._active].current == 0:
             # It won't reproduce with the first argument, which means we have
             # to investigate this item. Reset it and start bisection
@@ -543,8 +540,8 @@ class Bisecter:
         current = self.bisection.current()
         prefix = f"Bisection complete in {len(self.bisection._log)} steps, "
         if any(current):
-            axis = [str(i) for i, v in enumerate(current) if v != 0]
-            if len(axis) == len(self.bisection.args):
+            axes = [str(i) for i, v in enumerate(current) if v != 0]
+            if len(axes) == len(self.bisection.args):
                 last = True
                 for arg in self.bisection.args:
                     if arg.current != arg.last_index:
@@ -555,19 +552,19 @@ class Bisecter:
                           "is failing (is the last one really failing?):")
                 else:
                     print(f"{prefix}failure is caused by a "
-                          "combination of all axis; first bad "
+                          "combination of all axes; first bad "
                           "combination is:")
-            elif len(axis) > 1:
+            elif len(axes) > 1:
                 print(f"{prefix}failure is caused by a "
-                      f"combination of axis {','.join(axis)}; first "
+                      f"combination of axes {','.join(axes)}; first "
                       "bad combination is:")
             else:
                 if current[-1] == 1:
                     print(f"{prefix}all tested combinations are "
                           "failing (is the first one really passing?)")
                 else:
-                    print(f"{prefix}failure is caused only by the "
-                          f"{axis[0]} axis, first bad combination is:")
+                    print(f"{prefix}failure is caused only by "
+                          f"axis {axes[0]}, first bad combination is:")
         else:
             print(f"{prefix}even the first (expected to be good) "
                   "combination reports failure:")
@@ -654,7 +651,7 @@ class Bisecter:
         self._load_state()
         print(self.bisection.log())
         if self.bisection.variants_left() == 0:
-            print("Bisection complete, last good combination:")
+            print("Bisection complete, first bad combination:")
             print(self._current_value())
 
     def reset(self):
