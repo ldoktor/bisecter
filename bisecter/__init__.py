@@ -540,8 +540,8 @@ class Bisecter:
         current = self.bisection.current()
         prefix = f"Bisection complete in {len(self.bisection._log)} steps, "
         if any(current):
-            axis = [str(i) for i, v in enumerate(current) if v != 0]
-            if len(axis) == len(self.bisection.args):
+            axes = [str(i) for i, v in enumerate(current) if v != 0]
+            if len(axes) == len(self.bisection.args):
                 last = True
                 for arg in self.bisection.args:
                     if arg.current != arg.last_index:
@@ -552,11 +552,11 @@ class Bisecter:
                           "is failing (is the last one really failing?):")
                 else:
                     print(f"{prefix}failure is caused by a "
-                          "combination of all axis; first bad "
+                          "combination of all axes; first bad "
                           "combination is:")
-            elif len(axis) > 1:
+            elif len(axes) > 1:
                 print(f"{prefix}failure is caused by a "
-                      f"combination of axis {','.join(axis)}; first "
+                      f"combination of axes {','.join(axes)}; first "
                       "bad combination is:")
             else:
                 if current[-1] == 1:
@@ -564,7 +564,7 @@ class Bisecter:
                           "failing (is the first one really passing?)")
                 else:
                     print(f"{prefix}failure is caused only by "
-                          f"axis {axis[0]}, first bad combination is:")
+                          f"axis {axes[0]}, first bad combination is:")
         else:
             print(f"{prefix}even the first (expected to be good) "
                   "combination reports failure:")
