@@ -668,3 +668,9 @@ class Bisecter:
                 sys.stderr.write(f"Failed to remove '{self.args.state_file}': "
                                  f"{details}\n")
                 sys.exit(-1)
+
+
+def main():
+    """Main entry point for the bisecter command."""
+    app = Bisecter()
+    sys.exit(app())

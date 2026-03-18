@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=61.0", "setuptools-scm>=8.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bisecter"
+dynamic = ["version"]
+description = "Allows to bisect over arbitrary number of arguments."
+readme = "README.rst"
+license = "GPL-2.0-or-later"
+requires-python = ">=3.8"
+authors = [
+    { name = "Lukas Doktor", email = "ldoktor@redhat.com" }
+]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Developers",
+    "Natural Language :: English",
+    "Operating System :: POSIX",
+    "Topic :: Software Development :: Testing",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+[project.optional-dependencies]
+yaml = ["PyYAML"]
+docs = ["Sphinx"]
+dev = ["PyYAML", "Sphinx"]
+
+[project.scripts]
+bisecter = "bisecter:main"
+
+[project.urls]
+Homepage = "https://github.com/ldoktor/bisecter"
+Repository = "https://github.com/ldoktor/bisecter"
+
+[tool.setuptools]
+packages = ["bisecter"]
+
+[tool.setuptools_scm]
+version_scheme = "guess-next-dev"
+local_scheme = "no-local-version"

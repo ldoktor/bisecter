@@ -15,26 +15,19 @@ import shlex
 import shutil
 import subprocess
 import sys
+from importlib.metadata import version as get_version
+
 ROOT_PATH = os.path.abspath(os.path.join(os.path.pardir, os.path.pardir))
 sys.path.insert(0, ROOT_PATH)
-from setup import _get_git_version  # pylint: disable=C0413
 
 # -- Project information -----------------------------------------------------
 
-project = 'RunPerf'
+project = 'Bisecter'
 copyright = '2023, Lukáš Doktor'
 author = 'Lukáš Doktor'
 
 # The full version, including alpha/beta/rc tags
-release = _get_git_version()
-if release == '0.0':
-    # Probably in shallow-cloned git, fetch the latest tag
-    try:
-        subprocess.call([shutil.which("git"), "fetch",  # nosec
-                         "--depth=500"])
-        release = _get_git_version()
-    except subprocess.SubprocessError:
-        pass
+release = get_version('bisecter')
 
 # -- API docs ----------------------------------------------------------------
 API_SOURCE_DIR = os.path.join(ROOT_PATH, 'bisecter')
