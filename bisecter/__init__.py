@@ -20,9 +20,9 @@ import enum
 import math
 import os
 import pickle
-import pipes
 import re
 import subprocess
+import shlex
 import sys
 
 from bisecter import utils
@@ -506,7 +506,7 @@ class Bisecter:
         """
         Report value of the current variant in a simple form
         """
-        return ' '.join(pipes.quote(_) for _ in self.bisection.value(variant))
+        return ' '.join(shlex.quote(_) for _ in self.bisection.value(variant))
 
     def _report_remaining_steps(self):
         """
